@@ -1,0 +1,36 @@
+name: Validate Vendor Config
+
+on:
+  push:
+    paths:
+      - 'config/vendor.config.json'
+      - 'config/vendor.config.schema.json'
+      - 'scripts/**'
+  pull_request:
+    paths:
+      - 'config/vendor.config.json'
+      - 'config/vendor.config.schema.json'
+      - 'scripts/**'
+
+jobs:
+  validate:
+    name: Validate Schema & Secret References
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ajv-cli
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: JSON Schema Validation
+        run: ajv validate -s config/vendor.config.schema.json -d config/vendor.config.json -c ajv-formats --spec=draft2020
+
+      - name: Secret Reference Audit
+        run: node scripts/audit-secrets.js config/vendor.config.json

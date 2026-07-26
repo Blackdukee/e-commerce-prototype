@@ -1,0 +1,3 @@
+ignored:
+  - DL3008 # Pin versions in apt get install
+  - DL3003 # Use WORKDIR to switch directories

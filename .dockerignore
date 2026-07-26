@@ -1,0 +1,12 @@
+**/.git
+**/.github
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/TestResults
+**/*.md
+**/*.log
+.hadolint.yaml
+node_modules
+specs

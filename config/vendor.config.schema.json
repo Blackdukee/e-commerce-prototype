@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VendorConfiguration",
+  "type": "object",
+  "required": ["vendorId", "vendorDisplayName", "tiers"],
+  "properties": {
+    "vendorId": {
+      "type": "string",
+      "pattern": "^[a-z0-9\\-]+$"
+    },
+    "vendorDisplayName": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "tiers": {
+      "type": "object",
+      "required": ["build", "boot", "runtime"],
+      "properties": {
+        "build": {
+          "type": "object",
+          "required": ["vendorId"],
+          "properties": {
+            "vendorId": { "type": "string" }
+          }
+        },
+        "boot": {
+          "type": "object",
+          "required": ["auth", "caching", "email", "analytics"],
+          "properties": {
+            "auth": {
+              "type": "object",
+              "required": ["tokenLifetimeMinutes", "refreshTokenLifetimeDays", "jwtSecret", "passwordMinLength"],
+              "properties": {
+                "tokenLifetimeMinutes": { "type": "integer", "minimum": 5, "maximum": 1440 },
+                "refreshTokenLifetimeDays": { "type": "integer", "minimum": 1, "maximum": 90 },
+                "jwtSecret": { "type": "string", "pattern": "^ref:(env|vault|aws-ssm):.+$" },
+                "googleClientId": { "type": ["string", "null"] },
+                "googleClientSecret": { "type": ["string", "null"], "pattern": "^ref:(env|vault|aws-ssm):.+$" },
+                "facebookAppId": { "type": ["string", "null"] },
+                "facebookAppSecret": { "type": ["string", "null"], "pattern": "^ref:(env|vault|aws-ssm):.+$" },
+                "passwordMinLength": { "type": "integer", "minimum": 8, "maximum": 128 },
+                "passwordRequireUppercase": { "type": "boolean" },
+                "passwordRequireDigit": { "type": "boolean" },
+                "passwordRequireSpecialChar": { "type": "boolean" }
+              }
+            },
+            "caching": {
+              "type": "object",
+              "required": ["provider"],
+              "properties": {
+                "provider": { "type": "string", "enum": ["Memory", "Redis"] },
+                "redisConnectionString": { "type": ["string", "null"], "pattern": "^ref:(env|vault|aws-ssm):.+$" },
+                "keyPrefix": { "type": ["string", "null"] }
+              }
+            },
+            "email": {
+              "type": "object",
+              "required": ["provider", "senderAddress", "senderName"],
+              "properties": {
+                "provider": { "type": "string", "enum": ["SendGrid", "Smtp"] },
+                "senderAddress": { "type": "string", "format": "email" },
+                "senderName": { "type": "string" },
+                "sendGridApiKey": { "type": ["string", "null"], "pattern": "^ref:(env|vault|aws-ssm):.+$" },
+                "smtpHost": { "type": ["string", "null"] },
+                "smtpPort": { "type": ["integer", "null"] },
+                "smtpUsername": { "type": ["string", "null"] },
+                "smtpPassword": { "type": ["string", "null"], "pattern": "^ref:(env|vault|aws-ssm):.+$" }
+              }
+            },
+            "analytics": {
+              "type": "object",
+              "required": ["provider", "trackingId", "serverSideForwarding", "consentRequired"],
+              "properties": {
+                "provider": { "type": "string" },
+                "trackingId": { "type": "string" },
+                "serverSideForwarding": { "type": "boolean" },
+                "forwardingSecret": { "type": ["string", "null"], "pattern": "^ref:(env|vault|aws-ssm):.+$" },
+                "consentRequired": { "type": "boolean" }
+              }
+            }
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "required": ["branding", "locale", "tax", "checkout", "payments", "shipping", "promotions", "featureFlags"],
+          "properties": {
+            "branding": {
+              "type": "object",
+              "required": ["logoUrl", "primaryColor", "secondaryColor", "fontFamily", "metaTitle", "metaDescription"],
+              "properties": {
+                "logoUrl": { "type": "string" },
+                "faviconUrl": { "type": ["string", "null"] },
+                "primaryColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+                "secondaryColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+                "fontFamily": { "type": "string" },
+                "metaTitle": { "type": "string", "maxLength": 70 },
+                "metaDescription": { "type": "string", "maxLength": 160 }
+              }
+            },
+            "locale": {
+              "type": "object",
+              "required": ["defaultLanguage", "supportedLanguages", "defaultCurrency", "supportedCurrencies", "timezone", "direction"],
+              "properties": {
+                "defaultLanguage": { "type": "string" },
+                "supportedLanguages": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                "defaultCurrency": { "type": "string" },
+                "supportedCurrencies": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                "timezone": { "type": "string" },
+                "direction": { "type": "string", "enum": ["ltr", "rtl"] }
+              }
+            },
+            "tax": {
+              "type": "object",
+              "required": ["strategy", "pricesIncludeTax"],
+              "properties": {
+                "strategy": { "type": "string", "enum": ["Flat", "TaxJar", "Avalara", "None"] },
+                "flatRatePercentage": { "type": ["number", "null"] },
+                "pricesIncludeTax": { "type": "boolean" }
+              }
+            },
+            "checkout": {
+              "type": "object",
+              "required": ["guestCheckoutEnabled", "maxItemsPerOrder", "orderNumberPrefix"],
+              "properties": {
+                "guestCheckoutEnabled": { "type": "boolean" },
+                "maxItemsPerOrder": { "type": "integer", "minimum": 1, "maximum": 1000 },
+                "orderNumberPrefix": { "type": "string", "pattern": "^[A-Z]{2,5}$" }
+              }
+            },
+            "payments": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["providerName", "enabled", "isDefault", "credentials", "supportedMethods", "captureMode", "webhookSecret"],
+                "properties": {
+                  "providerName": { "type": "string" },
+                  "enabled": { "type": "boolean" },
+                  "isDefault": { "type": "boolean" },
+                  "credentials": {
+                    "type": "object",
+                    "required": ["publicKey", "secretKey"],
+                    "properties": {
+                      "publicKey": { "type": "string" },
+                      "secretKey": { "type": "string", "pattern": "^ref:(env|vault|aws-ssm):.+$" }
+                    }
+                  },
+                  "supportedMethods": { "type": "array", "items": { "type": "string" } },
+                  "captureMode": { "type": "string", "enum": ["Automatic", "Manual"] },
+                  "webhookSecret": { "type": "string", "pattern": "^ref:(env|vault|aws-ssm):.+$" }
+                }
+              }
+            },
+            "shipping": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["providerName", "enabled", "settings"],
+                "properties": {
+                  "providerName": { "type": "string" },
+                  "enabled": { "type": "boolean" },
+                  "settings": { "type": "object" },
+                  "apiKey": { "type": ["string", "null"], "pattern": "^ref:(env|vault|aws-ssm):.+$" }
+                }
+              }
+            },
+            "promotions": {
+              "type": "object",
+              "required": ["enabled", "maxDiscountCodesPerOrder", "evaluationStrategy", "allowStacking"],
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "maxDiscountCodesPerOrder": { "type": "integer", "minimum": 1, "maximum": 10 },
+                "evaluationStrategy": { "type": "string" },
+                "allowStacking": { "type": "boolean" }
+              }
+            },
+            "featureFlags": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  }
+}

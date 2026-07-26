@@ -1,0 +1,103 @@
+{
+  "vendorId": "acme-store",
+  "vendorDisplayName": "ACME Store",
+  "tiers": {
+    "build": {
+      "vendorId": "acme-store"
+    },
+    "boot": {
+      "auth": {
+        "tokenLifetimeMinutes": 60,
+        "refreshTokenLifetimeDays": 30,
+        "jwtSecret": "ref:env:JWT_SECRET",
+        "googleClientId": "123456.apps.googleusercontent.com",
+        "googleClientSecret": "ref:env:GOOGLE_CLIENT_SECRET",
+        "passwordMinLength": 8,
+        "passwordRequireUppercase": true,
+        "passwordRequireDigit": true,
+        "passwordRequireSpecialChar": false
+      },
+      "caching": {
+        "provider": "Memory",
+        "keyPrefix": "acme"
+      },
+      "email": {
+        "provider": "SendGrid",
+        "senderAddress": "noreply@acme-store.com",
+        "senderName": "ACME Store",
+        "sendGridApiKey": "ref:env:SENDGRID_API_KEY"
+      },
+      "analytics": {
+        "provider": "ga4",
+        "trackingId": "G-XXXXXXXXXX",
+        "serverSideForwarding": false,
+        "consentRequired": true
+      }
+    },
+    "runtime": {
+      "branding": {
+        "logoUrl": "https://cdn.acme-store.com/logo.svg",
+        "primaryColor": "#2563EB",
+        "secondaryColor": "#1E40AF",
+        "fontFamily": "Inter",
+        "metaTitle": "ACME Store — Quality Products",
+        "metaDescription": "Shop the best products at ACME Store"
+      },
+      "locale": {
+        "defaultLanguage": "en",
+        "supportedLanguages": ["en", "ar"],
+        "defaultCurrency": "USD",
+        "supportedCurrencies": ["USD", "EUR"],
+        "timezone": "America/New_York",
+        "direction": "ltr"
+      },
+      "tax": {
+        "strategy": "Flat",
+        "flatRatePercentage": 8.875,
+        "pricesIncludeTax": false
+      },
+      "checkout": {
+        "guestCheckoutEnabled": true,
+        "maxItemsPerOrder": 50,
+        "orderNumberPrefix": "ACM"
+      },
+      "payments": [
+        {
+          "providerName": "stripe",
+          "enabled": true,
+          "isDefault": true,
+          "credentials": {
+            "publicKey": "pk_test_123",
+            "secretKey": "ref:env:STRIPE_SECRET_KEY"
+          },
+          "supportedMethods": ["card", "apple_pay"],
+          "captureMode": "Automatic",
+          "webhookSecret": "ref:env:STRIPE_WEBHOOK_SECRET"
+        }
+      ],
+      "shipping": [
+        {
+          "providerName": "flat-rate",
+          "enabled": true,
+          "settings": {
+            "baseRate": 5.99,
+            "freeShippingThreshold": 50.00
+          }
+        }
+      ],
+      "promotions": {
+        "enabled": true,
+        "maxDiscountCodesPerOrder": 1,
+        "evaluationStrategy": "best-discount",
+        "allowStacking": false
+      },
+      "featureFlags": {
+        "enableReviews": true,
+        "enableWishlist": false,
+        "enableAnalytics": true,
+        "maintenanceMode": false,
+        "enablePromotions": true
+      }
+    }
+  }
+}
