@@ -55,8 +55,15 @@ public class SecretReferenceJsonConverter : JsonConverter<SecretReference>
         return string.IsNullOrWhiteSpace(str) ? null : new SecretReference(str.StartsWith("ref:***") ? "ref:env:MASKED" : str);
     }
 
-    public override void Write(Utf8JsonWriter writer, SecretReference value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, SecretReference? value, JsonSerializerOptions options)
     {
-        writer.WriteStringValue(value.ToString());
+        if (value is null)
+        {
+            writer.WriteNullValue();
+        }
+        else
+        {
+            writer.WriteStringValue(value.ToString());
+        }
     }
 }

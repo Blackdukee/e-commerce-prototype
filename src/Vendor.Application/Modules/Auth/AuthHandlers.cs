@@ -39,7 +39,7 @@ public class RegisterCustomerCommandHandler(
         var customer = new Customer(CustomerId.New(), request.Email, request.FirstName, request.LastName, CustomerType.Registered);
         await customerRepository.AddAsync(customer, ct);
 
-        var tokenResult = tokenService.GenerateTokens(customer.Id.Value, customer.Email, ["Customer"]);
+        var tokenResult = tokenService.GenerateTokens(customer.Id.Value, customer.Email, [customer.Role.ToString()]);
         var customerDto = new CustomerDto(customer.Id.Value, customer.Email, customer.FirstName, customer.LastName, customer.CustomerType.ToString(), customer.AnalyticsConsent);
 
         return new AuthResponseDto(tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.AccessTokenExpiresAtUtc, customerDto);
@@ -59,7 +59,12 @@ public class LoginWithPasswordCommandHandler(
             return Error.Unauthorized("Invalid email or password.");
         }
 
-        var tokenResult = tokenService.GenerateTokens(customer.Id.Value, customer.Email, ["Customer"]);
+        if (customer.Status == CustomerStatus.Suspended)
+        {
+            return Error.Forbidden("ACCOUNT_SUSPENDED", "Customer account is suspended.");
+        }
+
+        var tokenResult = tokenService.GenerateTokens(customer.Id.Value, customer.Email, [customer.Role.ToString()]);
         var customerDto = new CustomerDto(customer.Id.Value, customer.Email, customer.FirstName, customer.LastName, customer.CustomerType.ToString(), customer.AnalyticsConsent);
 
         return new AuthResponseDto(tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.AccessTokenExpiresAtUtc, customerDto);

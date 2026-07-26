@@ -59,25 +59,6 @@ public static class VendorSettingsEndpoints
         .Produces(StatusCodes.Status401Unauthorized)
         .Produces(StatusCodes.Status409Conflict);
 
-        group.MapGet("/schema", async () =>
-        {
-            var schemaPath = Path.Combine(AppContext.BaseDirectory, "config", "vendor.config.schema.json");
-            if (!File.Exists(schemaPath))
-            {
-                schemaPath = Path.Combine(Directory.GetCurrentDirectory(), "config", "vendor.config.schema.json");
-            }
-
-            if (!File.Exists(schemaPath))
-            {
-                return Results.NotFound(new { error = "JSON Schema file not found." });
-            }
-
-            var schemaContent = await File.ReadAllTextAsync(schemaPath);
-            return Results.Content(schemaContent, "application/schema+json");
-        })
-        .WithName("GetVendorConfigSchema")
-        .Produces(StatusCodes.Status200OK);
-
-        return routes;
+        return group;
     }
 }

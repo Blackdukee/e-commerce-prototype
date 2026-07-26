@@ -18,6 +18,7 @@ public static class WebApplicationExtensions
         // Chain module endpoint groups
         v1.MapAuthEndpoints();
         v1.MapCustomerEndpoints();
+        v1.MapAdminCustomerEndpoints();
         v1.MapProductEndpoints();
         v1.MapCartEndpoints();
         v1.MapOrderEndpoints();

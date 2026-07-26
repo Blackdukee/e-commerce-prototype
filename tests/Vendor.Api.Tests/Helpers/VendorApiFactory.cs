@@ -22,8 +22,14 @@ public class VendorApiFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             // Replace the SQL Server DbContext with an in-memory one for API tests
-            services.RemoveAll<DbContextOptions<VendorDbContext>>();
-            services.RemoveAll<VendorDbContext>();
+            var efDescriptors = services.Where(d =>
+                d.ServiceType.Name.Contains("DbContext") ||
+                d.ServiceType.Namespace?.Contains("EntityFrameworkCore") == true).ToList();
+
+            foreach (var d in efDescriptors)
+            {
+                services.Remove(d);
+            }
 
             services.AddDbContext<VendorDbContext>(options =>
             {

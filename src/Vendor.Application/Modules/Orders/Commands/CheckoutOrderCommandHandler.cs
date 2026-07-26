@@ -3,6 +3,7 @@ using Vendor.Application.Common.Results;
 using Vendor.Application.Interfaces;
 using Vendor.Application.Modules.Orders.Dtos;
 using Vendor.Domain.Aggregates.Cart;
+using Vendor.Domain.Aggregates.Customer;
 using Vendor.Domain.Aggregates.Order;
 using Vendor.Domain.Aggregates.Payment;
 using Vendor.Domain.Aggregates.Product;
@@ -15,6 +16,7 @@ namespace Vendor.Application.Modules.Orders.Commands;
 
 public class CheckoutOrderCommandHandler(
     ICartRepository cartRepository,
+    ICustomerRepository customerRepository,
     IProductRepository productRepository,
     IPromotionRepository promotionRepository,
     IOrderRepository orderRepository,
@@ -39,7 +41,18 @@ public class CheckoutOrderCommandHandler(
             return Error.Failure("Cart.Empty", "Cannot checkout an empty cart.");
         }
 
+        // Check Customer Suspension Status if customer ID is present on cart
+        if (cart.CustomerId != null)
+        {
+            var customer = await customerRepository.GetByIdAsync(cart.CustomerId.Value, ct);
+            if (customer != null && customer.Status == CustomerStatus.Suspended)
+            {
+                return Error.Forbidden("ACCOUNT_SUSPENDED", "Customer account is suspended.");
+            }
+        }
+
         // 2. Verify Stock & Build Order Lines
+        var orderId = OrderId.New();
         var currency = cart.Items.First().UnitPrice.Currency;
         var orderLines = new List<OrderLine>();
         var productsToUpdate = new List<Product>();
@@ -49,7 +62,6 @@ public class CheckoutOrderCommandHandler(
             var product = await productRepository.GetByIdAsync(new ProductId(cartItem.ProductVariantId.Value), ct);
             if (product == null)
             {
-                // Fallback: check if product exists by variant
                 return Error.NotFound("ProductVariant", cartItem.ProductVariantId);
             }
 
@@ -61,113 +73,91 @@ public class CheckoutOrderCommandHandler(
 
             if (variant.StockQuantity < cartItem.Quantity)
             {
-                return Error.Failure("Stock.Insufficient", $"Insufficient stock for SKU '{variant.Sku}'. Available: {variant.StockQuantity}, requested: {cartItem.Quantity}.");
+                return Error.Failure("Stock.Insufficient", $"Insufficient stock for SKU '{variant.Sku}'. Requested: {cartItem.Quantity}, Available: {variant.StockQuantity}");
             }
 
-            product.DeductStock(variant.Id, cartItem.Quantity);
+            product.DeductStock(cartItem.ProductVariantId, cartItem.Quantity);
             productsToUpdate.Add(product);
 
-            var line = new OrderLine(
-                OrderId.Empty,
-                variant.Id,
+            orderLines.Add(new OrderLine(
+                orderId,
+                cartItem.ProductVariantId,
                 product.Name,
                 variant.Sku,
                 cartItem.Quantity,
-                cartItem.UnitPrice);
-            orderLines.Add(line);
+                cartItem.UnitPrice));
         }
 
-        // 3. Evaluate Discount Code
-        var discountAmount = Money.Zero(currency);
-        Promotion? appliedPromotion = null;
+        // 3. Tax Calculation
+        var taxAmount = await taxCalculator.CalculateTaxAsync(orderLines, request.ShippingAddress.ToDomain(), currency, ct);
+        var subtotalAmount = orderLines.Sum(l => l.LineTotal.Amount);
+        var subtotal = new Money(subtotalAmount, currency);
 
+        // 4. Discount Application
+        var discountAmount = Money.Zero(currency);
         if (!string.IsNullOrWhiteSpace(cart.DiscountCode))
         {
-            appliedPromotion = await promotionRepository.GetByCodeAsync(cart.DiscountCode, ct);
-            if (appliedPromotion != null && appliedPromotion.IsActive)
+            var promotion = await promotionRepository.GetByCodeAsync(cart.DiscountCode, ct);
+            var now = dateTimeProvider.UtcNow;
+            if (promotion != null && promotion.IsValidAt(now, subtotal))
             {
-                var subtotalAmount = orderLines.Sum(l => l.LineTotal.Amount);
-                var subtotalMoney = new Money(subtotalAmount, currency);
-                discountAmount = appliedPromotion.CalculateDiscount(subtotalMoney, dateTimeProvider.UtcNow);
-                appliedPromotion.RecordUsage();
+                discountAmount = promotion.CalculateDiscount(subtotal, now);
+                promotion.RecordUsage();
+                await promotionRepository.UpdateAsync(promotion, ct);
             }
         }
 
-        // 4. Calculate Tax
-        var shippingAddress = request.ShippingAddress.ToDomain();
-        var taxAmount = await taxCalculator.CalculateTaxAsync(orderLines, shippingAddress, currency, ct);
-        var shippingCost = new Money(5.00m, currency); // Fixed default shipping
-
-        // 5 & 6. Instantiate Order & Payment
-        var customerId = cart.CustomerId ?? Domain.Aggregates.Customer.CustomerId.New();
-        var orderNumber = $"ORD-{dateTimeProvider.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString()[..6].ToUpperInvariant()}";
-        var orderId = OrderId.New();
-
-        // Re-link order lines to actual order ID
-        var finalLines = orderLines.Select(l => new OrderLine(
-            orderId,
-            l.ProductVariantId,
-            l.ProductName,
-            l.Sku,
-            l.Quantity,
-            l.UnitPrice)).ToList();
+        // 5. Create Order
+        var orderNumber = $"ORD-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}";
+        var customerId = cart.CustomerId ?? CustomerId.New();
+        var shippingCost = Money.Zero(currency);
 
         var order = new Order(
             orderId,
             customerId,
             orderNumber,
-            shippingAddress,
-            finalLines,
+            request.ShippingAddress.ToDomain(),
+            orderLines,
             taxAmount,
             shippingCost,
             discountAmount);
 
+        await orderRepository.AddAsync(order, ct);
+
+        // 6. Process Payment
+        var authResult = await paymentGateway.AuthorizeAsync(order.Total, request.IdempotencyKey, ct);
         var payment = new Payment(
             PaymentId.New(),
-            order.Id,
+            orderId,
             order.Total,
             request.IdempotencyKey);
 
-        // 7 & 8. Update Product Stock, Promotion Usage, Clear Cart
-        foreach (var p in productsToUpdate)
-        {
-            await productRepository.UpdateAsync(p, ct);
-        }
-
-        if (appliedPromotion != null)
-        {
-            await promotionRepository.UpdateAsync(appliedPromotion, ct);
-        }
-
-        cart.MarkConvertedToOrder();
-        await cartRepository.UpdateAsync(cart, ct);
-        await orderRepository.AddAsync(order, ct);
-        await paymentRepository.AddAsync(payment, ct);
-
-        // 9. Commit Local Database Transaction
-        await unitOfWork.SaveChangesAsync(ct);
-
-        // 10. Post-Commit Payment Gateway Authorization
-        var authResult = await paymentGateway.AuthorizeAsync(order.Total, request.IdempotencyKey, ct);
         if (authResult.Success)
         {
-            payment.Capture(authResult.AuthorizationToken, dateTimeProvider.UtcNow);
-            order.ConfirmPayment();
+            var captureResult = await paymentGateway.CaptureAsync(authResult.AuthorizationToken, request.IdempotencyKey, ct);
+            if (captureResult.Success)
+            {
+                payment.Capture(captureResult.GatewayTransactionId);
+                order.ConfirmPayment();
+            }
+            else
+            {
+                payment.Fail(captureResult.ErrorMessage ?? "Payment capture failed.");
+            }
         }
         else
         {
             payment.Fail(authResult.ErrorMessage ?? "Payment authorization failed.");
-            order.Cancel(authResult.ErrorMessage);
         }
 
-        await paymentRepository.UpdateAsync(payment, ct);
-        await orderRepository.UpdateAsync(order, ct);
+        await paymentRepository.AddAsync(payment, ct);
+
+        // 7. Update Cart Status
+        cart.MarkConvertedToOrder();
+        await cartRepository.UpdateAsync(cart, ct);
+
+        // 8. Commit Unit of Work
         await unitOfWork.SaveChangesAsync(ct);
-
-        if (!authResult.Success)
-        {
-            return Error.Failure("Payment.Failed", authResult.ErrorMessage ?? "Payment failed during checkout.");
-        }
 
         return OrderDto.FromDomain(order);
     }

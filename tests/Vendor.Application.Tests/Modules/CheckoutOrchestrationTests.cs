@@ -18,6 +18,7 @@ namespace Vendor.Application.Tests.Modules;
 public class CheckoutOrchestrationTests
 {
     private readonly ICartRepository _cartRepository = Substitute.For<ICartRepository>();
+    private readonly ICustomerRepository _customerRepository = Substitute.For<ICustomerRepository>();
     private readonly IProductRepository _productRepository = Substitute.For<IProductRepository>();
     private readonly IPromotionRepository _promotionRepository = Substitute.For<IPromotionRepository>();
     private readonly IOrderRepository _orderRepository = Substitute.For<IOrderRepository>();
@@ -35,7 +36,7 @@ public class CheckoutOrchestrationTests
         _cartRepository.GetByIdAsync(new CartId(cartId), Arg.Any<CancellationToken>()).Returns(cart);
 
         var handler = new CheckoutOrderCommandHandler(
-            _cartRepository, _productRepository, _promotionRepository,
+            _cartRepository, _customerRepository, _productRepository, _promotionRepository,
             _orderRepository, _paymentRepository, _taxCalculator,
             _paymentGateway, _unitOfWork, _dateTimeProvider);
 
@@ -74,9 +75,11 @@ public class CheckoutOrchestrationTests
         _dateTimeProvider.UtcNow.Returns(new DateTime(2026, 7, 25, 12, 0, 0, DateTimeKind.Utc));
         _paymentGateway.AuthorizeAsync(Arg.Any<Money>(), "IDEMP-001", Arg.Any<CancellationToken>())
             .Returns(new PaymentAuthorizationResult(true, "AUTH-TOKEN-123", null));
+        _paymentGateway.CaptureAsync(Arg.Any<string>(), "IDEMP-001", Arg.Any<CancellationToken>())
+            .Returns(new PaymentCaptureResult(true, "CAP-TRANSACTION-123", null));
 
         var handler = new CheckoutOrderCommandHandler(
-            _cartRepository, _productRepository, _promotionRepository,
+            _cartRepository, _customerRepository, _productRepository, _promotionRepository,
             _orderRepository, _paymentRepository, _taxCalculator,
             _paymentGateway, _unitOfWork, _dateTimeProvider);
 
@@ -89,7 +92,7 @@ public class CheckoutOrchestrationTests
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Status.Should().Be("Confirmed");
-        await _unitOfWork.Received(2).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
         await _orderRepository.Received(1).AddAsync(Arg.Any<Order>(), Arg.Any<CancellationToken>());
     }
 }

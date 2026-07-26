@@ -38,6 +38,7 @@ public interface ITokenService
     TokenResult GenerateTokens(Guid userId, string email, IEnumerable<string> roles);
     Task<TokenResult?> RefreshTokenAsync(string refreshToken, CancellationToken ct = default);
     Task RevokeTokenAsync(string refreshToken, CancellationToken ct = default);
+    Task RevokeAllTokensForUserAsync(Guid userId, CancellationToken ct = default);
     Task<bool> ValidateTokenAsync(string token, CancellationToken ct = default);
 }
 

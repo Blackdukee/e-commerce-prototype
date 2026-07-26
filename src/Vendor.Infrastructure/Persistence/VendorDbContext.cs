@@ -19,6 +19,7 @@ public class VendorDbContext(DbContextOptions<VendorDbContext> options) : DbCont
 {
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerAuditLog> CustomerAuditLogs => Set<CustomerAuditLog>();
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<Payment> Payments => Set<Payment>();

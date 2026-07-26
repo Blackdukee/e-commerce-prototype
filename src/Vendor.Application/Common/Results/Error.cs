@@ -30,7 +30,10 @@ public record Error(string Code, string Description, ErrorType Type = ErrorType.
         new UnauthorizedError(description);
 
     public static Error Forbidden(string description = "Forbidden access.") =>
-        new ForbiddenError(description);
+        new ForbiddenError("Auth.Forbidden", description);
+
+    public static Error Forbidden(string code, string description) =>
+        new ForbiddenError(code, description);
 }
 
 public sealed record NotFoundError(string EntityName, object Key)
@@ -45,5 +48,8 @@ public sealed record ConflictError(string Code, string Description)
 public sealed record UnauthorizedError(string Description)
     : Error("Auth.Unauthorized", Description, ErrorType.Unauthorized);
 
-public sealed record ForbiddenError(string Description)
-    : Error("Auth.Forbidden", Description, ErrorType.Forbidden);
+public sealed record ForbiddenError(string Code, string Description)
+    : Error(Code, Description, ErrorType.Forbidden)
+{
+    public ForbiddenError(string description) : this("Auth.Forbidden", description) { }
+}

@@ -68,7 +68,7 @@ public class JwtTokenService(
         dbContext.RefreshTokens.Update(existingToken);
 
         var customer = await dbContext.Customers.FirstOrDefaultAsync(c => c.Id.Value == existingToken.CustomerId, ct);
-        if (customer == null) return null;
+        if (customer == null || customer.Status == Domain.Aggregates.Customer.CustomerStatus.Suspended) return null;
 
         var newTokens = GenerateTokens(customer.Id.Value, customer.Email, ["Customer"]);
         await dbContext.SaveChangesAsync(ct);
@@ -82,6 +82,23 @@ public class JwtTokenService(
         {
             existingToken.IsRevoked = true;
             dbContext.RefreshTokens.Update(existingToken);
+            await dbContext.SaveChangesAsync(ct);
+        }
+    }
+
+    public async Task RevokeAllTokensForUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        var activeTokens = await dbContext.RefreshTokens
+            .Where(t => t.CustomerId == userId && !t.IsRevoked)
+            .ToListAsync(ct);
+
+        foreach (var token in activeTokens)
+        {
+            token.IsRevoked = true;
+        }
+
+        if (activeTokens.Count > 0)
+        {
             await dbContext.SaveChangesAsync(ct);
         }
     }

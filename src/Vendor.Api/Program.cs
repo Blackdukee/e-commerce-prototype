@@ -1,7 +1,9 @@
 using Asp.Versioning;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Vendor.Api.Extensions;
 using Vendor.Api.Middleware;
+using Vendor.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +21,13 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
+
+// Auto-apply EF Core database migrations on startup
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<VendorDbContext>();
+    dbContext.Database.Migrate();
+}
 
 // Ordered Middleware Pipeline (9 Stages)
 // Stage 1: Exception Handler

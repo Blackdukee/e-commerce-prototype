@@ -66,6 +66,76 @@ public class CustomerRepository(VendorDbContext context) : ICustomerRepository
         context.Customers.Update(customer);
         return Task.CompletedTask;
     }
+
+    public async Task<(IReadOnlyList<Customer> Items, int TotalCount)> GetPagedAsync(
+        string? emailSearch,
+        CustomerRole? role,
+        CustomerStatus? status,
+        DateTime? registeredFrom,
+        DateTime? registeredTo,
+        int pageIndex,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = context.Customers.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(emailSearch))
+        {
+            var search = emailSearch.Trim().ToLowerInvariant();
+            query = query.Where(c => c.Email.Contains(search));
+        }
+
+        if (role.HasValue)
+        {
+            query = query.Where(c => c.Role == role.Value);
+        }
+
+        if (status.HasValue)
+        {
+            query = query.Where(c => c.Status == status.Value);
+        }
+
+        if (registeredFrom.HasValue)
+        {
+            query = query.Where(c => c.CreatedAtUtc >= registeredFrom.Value);
+        }
+
+        if (registeredTo.HasValue)
+        {
+            query = query.Where(c => c.CreatedAtUtc <= registeredTo.Value);
+        }
+
+        var totalCount = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(c => c.CreatedAtUtc)
+            .Skip(pageIndex * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, totalCount);
+    }
+
+    public async Task AddAuditLogAsync(CustomerAuditLog auditLog, CancellationToken ct = default)
+    {
+        await context.CustomerAuditLogs.AddAsync(auditLog, ct);
+    }
+
+    public async Task<(IReadOnlyList<CustomerAuditLog> Items, int TotalCount)> GetAuditLogsAsync(
+        CustomerId customerId,
+        int pageIndex,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = context.CustomerAuditLogs.Where(a => a.CustomerId == customerId);
+        var totalCount = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(a => a.TimestampUtc)
+            .Skip(pageIndex * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, totalCount);
+    }
 }
 
 public class CartRepository(VendorDbContext context) : ICartRepository
