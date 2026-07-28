@@ -10,7 +10,7 @@ The CI validation pipeline runs on every push/PR that modifies `config/vendor.co
 ## Step 1: JSON Schema Validation
 
 **Tool**: `ajv-cli` (npm package)
-**Command**: `npx ajv-cli validate -s config/vendor.config.schema.json -d config/vendor.config.json --spec=draft2020`
+**Command**: `npx -p ajv-cli -p ajv-formats ajv validate -c ajv-formats -s config/vendor.config.schema.json -d config/vendor.config.json --spec=draft2020`
 
 **Exit codes**:
 - `0`: Schema validation passes
@@ -80,7 +80,7 @@ jobs:
         with:
           node-version: '20'
       - name: JSON Schema Validation
-        run: npx ajv-cli validate -s config/vendor.config.schema.json -d config/vendor.config.json --spec=draft2020
+        run: npx -p ajv-cli -p ajv-formats ajv validate -c ajv-formats -s config/vendor.config.schema.json -d config/vendor.config.json --spec=draft2020
       - name: Secret Reference Audit
         run: node scripts/audit-secrets.js config/vendor.config.json
 ```
