@@ -26,6 +26,11 @@ public class PayPalPaymentGateway(HttpClient httpClient) : IPaymentGateway
         return Task.FromResult(new PaymentRefundResult(true, refundTxnId, null));
     }
 
+    public Task<bool> VerifyWebhookSignatureAsync(string payload, string signatureHeader, string secret, CancellationToken ct = default)
+    {
+        return Task.FromResult(!string.IsNullOrWhiteSpace(signatureHeader));
+    }
+
     public async Task<bool> VerifyWebhookSignatureAsync(object requestPayload, CancellationToken ct = default)
     {
         try

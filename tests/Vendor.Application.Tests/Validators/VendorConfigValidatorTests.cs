@@ -18,7 +18,7 @@ public class VendorConfigValidatorTests
         var boot = new VendorBootConfig(
             new AuthConfig(60, 30, new SecretReference("ref:env:JWT_SECRET"), null, null, null, null, 8, true, true, false),
             new CachingConfig(CacheProvider.Memory, null, "acme"),
-            new EmailConfig(EmailProvider.SendGrid, "noreply@acme.com", "ACME", new SecretReference("ref:env:SG_KEY"), null, null, null, null, null),
+            new EmailConfig(EmailProvider.Mailtrap, "noreply@acme.com", "ACME", new SecretReference("ref:env:MAILTRAP_API_KEY"), null, null, null, null, null),
             new AnalyticsConfig("ga4", "G-12345", false, null, true)
         );
         var runtime = new VendorRuntimeConfig(

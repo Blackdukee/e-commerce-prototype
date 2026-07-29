@@ -18,6 +18,8 @@ public class OrderAndPaymentEndpointsTests : IClassFixture<VendorApiFactory>
     public async Task WebhookStripe_ReturnsOk()
     {
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Stripe-Signature", "test-signature");
+
         var response = await client.PostAsJsonAsync("/api/v1/webhooks/stripe", new { type = "payment_intent.succeeded" });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);

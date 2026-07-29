@@ -53,7 +53,7 @@ public sealed record EmailConfig(
     EmailProvider Provider,
     string SenderAddress,
     string SenderName,
-    SecretReference? SendGridApiKey,
+    SecretReference? MailtrapApiKey,
     string? SmtpHost,
     int? SmtpPort,
     string? SmtpUsername,

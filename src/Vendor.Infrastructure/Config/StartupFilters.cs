@@ -63,7 +63,7 @@ public sealed class SecretResolutionFilter : IStartupFilter
         if (config.Boot?.Auth?.GoogleClientSecret != null) list.Add(config.Boot.Auth.GoogleClientSecret);
         if (config.Boot?.Auth?.FacebookAppSecret != null) list.Add(config.Boot.Auth.FacebookAppSecret);
         if (config.Boot?.Caching?.RedisConnectionString != null) list.Add(config.Boot.Caching.RedisConnectionString);
-        if (config.Boot?.Email?.SendGridApiKey != null) list.Add(config.Boot.Email.SendGridApiKey);
+        if (config.Boot?.Email?.MailtrapApiKey != null) list.Add(config.Boot.Email.MailtrapApiKey);
         if (config.Boot?.Email?.SmtpPassword != null) list.Add(config.Boot.Email.SmtpPassword);
         if (config.Boot?.Analytics?.ForwardingSecret != null) list.Add(config.Boot.Analytics.ForwardingSecret);
 

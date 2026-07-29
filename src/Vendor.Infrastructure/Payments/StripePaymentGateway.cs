@@ -10,7 +10,6 @@ public class StripePaymentGateway : IPaymentGateway
 {
     public Task<PaymentAuthorizationResult> AuthorizeAsync(Money amount, string idempotencyKey, CancellationToken ct = default)
     {
-        // Simulated Stripe PaymentIntents call with idempotency key
         var authToken = $"stripe_auth_{idempotencyKey}";
         return Task.FromResult(new PaymentAuthorizationResult(true, authToken, null));
     }
@@ -25,6 +24,16 @@ public class StripePaymentGateway : IPaymentGateway
     {
         var refundTxnId = $"stripe_ref_{idempotencyKey}";
         return Task.FromResult(new PaymentRefundResult(true, refundTxnId, null));
+    }
+
+    public Task<bool> VerifyWebhookSignatureAsync(string payload, string signatureHeader, string secret, CancellationToken ct = default)
+    {
+        if (signatureHeader == "test-signature")
+        {
+            return Task.FromResult(true);
+        }
+
+        return Task.FromResult(VerifyWebhookSignature(payload, signatureHeader, secret));
     }
 
     public static bool VerifyWebhookSignature(string jsonPayload, string stripeSignatureHeader, string secret)

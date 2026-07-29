@@ -67,6 +67,9 @@ public class PipelineShortCircuitTests
     public async Task TransactionBehavior_HandlerFails_RollsBackTransaction()
     {
         var unitOfWork = Substitute.For<IUnitOfWork>();
+        unitOfWork.ExecuteInTransactionAsync(Arg.Any<Func<Task<Result<string>>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<Func<Task<Result<string>>>>()());
+
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TransactionBehavior<TestCommand, Result<string>>>.Instance;
         var behavior = new TransactionBehavior<TestCommand, Result<string>>(unitOfWork, logger);
 
@@ -76,8 +79,6 @@ public class PipelineShortCircuitTests
         var result = await behavior.Handle(command, next, CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
-        await unitOfWork.Received(1).BeginTransactionAsync(Arg.Any<CancellationToken>());
-        await unitOfWork.Received(1).RollbackAsync(Arg.Any<CancellationToken>());
-        await unitOfWork.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
+        await unitOfWork.Received(1).ExecuteInTransactionAsync(Arg.Any<Func<Task<Result<string>>>>(), Arg.Any<CancellationToken>());
     }
 }

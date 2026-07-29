@@ -8,7 +8,7 @@ public enum CacheProvider
 
 public enum EmailProvider
 {
-    SendGrid,
+    Mailtrap,
     Smtp
 }
 

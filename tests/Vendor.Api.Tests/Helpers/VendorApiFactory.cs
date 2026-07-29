@@ -15,6 +15,8 @@ public class VendorApiFactory : WebApplicationFactory<Program>
     public const string TestIssuer = "VendorApiTest";
     public const string TestAudience = "VendorApiTestClient";
 
+    private readonly string _dbName = "VendorApiTest_" + Guid.NewGuid().ToString("N");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -33,7 +35,19 @@ public class VendorApiFactory : WebApplicationFactory<Program>
 
             services.AddDbContext<VendorDbContext>(options =>
             {
-                options.UseInMemoryDatabase("VendorApiTest_" + Guid.NewGuid().ToString("N"));
+                options.UseInMemoryDatabase(_dbName);
+                options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning));
+            });
+
+            // Override health check registrations for tests so external SQL Server/Redis checks don't block tests
+            services.Configure<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckServiceOptions>(options =>
+            {
+                options.Registrations.Clear();
+                options.Registrations.Add(new Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckRegistration(
+                    "test_db",
+                    new TestHealthCheck(),
+                    failureStatus: null,
+                    tags: ["ready", "live"]));
             });
 
             // Override JWT validation to use the test signing key
@@ -52,5 +66,15 @@ public class VendorApiFactory : WebApplicationFactory<Program>
                 };
             });
         });
+    }
+
+    private sealed class TestHealthCheck : Microsoft.Extensions.Diagnostics.HealthChecks.IHealthCheck
+    {
+        public Task<Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult> CheckHealthAsync(
+            Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy());
+        }
     }
 }

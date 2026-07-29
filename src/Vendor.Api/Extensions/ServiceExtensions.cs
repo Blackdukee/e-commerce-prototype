@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Vendor.Api.Options;
 using Vendor.Application;
 using Vendor.Infrastructure;
 
@@ -19,6 +20,12 @@ public static class ServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // Bind and validate JwtOptions at startup — fails fast if key is missing or too short
+        services.AddOptions<JwtOptions>()
+            .BindConfiguration(JwtOptions.SectionName)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // Register Application and Infrastructure layers
         services.AddApplication();
         services.AddInfrastructure(configuration);
@@ -26,20 +33,31 @@ public static class ServiceExtensions
         // Response Compression
         services.AddResponseCompression();
 
-        // Authentication & Authorization
-        var secretKey = configuration["Jwt:SecretKey"] ?? "super-secret-jwt-key-minimum-32-characters-long!";
+        // Authentication & Authorization — resolved from validated JwtOptions
+        var jwtOptions = configuration
+            .GetSection(JwtOptions.SectionName)
+            .Get<JwtOptions>()
+            ?? throw new InvalidOperationException(
+                "JWT configuration section 'Jwt' is missing or incomplete. " +
+                "Ensure Jwt:SecretKey, Jwt:Issuer, and Jwt:Audience are set.");
+
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtOptions.Issuer,
+                    ValidateAudience = true,
+                    ValidAudience = jwtOptions.Audience,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey.Length >= 32 ? secretKey : secretKey.PadRight(32, '0')))
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(jwtOptions.SecretKey)),
+                    ClockSkew = TimeSpan.FromSeconds(30)
                 };
             });
+
         services.AddAuthorization();
 
         // API Versioning
@@ -56,7 +74,7 @@ public static class ServiceExtensions
             options.SubstituteApiVersionInUrl = true;
         });
 
-        // 4 Named Rate Limiting Policies
+        // Rate Limiting Policies
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -90,25 +108,83 @@ public static class ServiceExtensions
             });
         });
 
-        // CORS configuration with AllowCredentials for SignalR
+        // CORS — origins driven by configuration (env-specific), not wildcard
+        var allowedOrigins = configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? [];
+
         services.AddCors(options =>
         {
             options.AddPolicy("VendorCorsPolicy", builder =>
             {
-                builder.SetIsOriginAllowed(_ => true)
-                       .AllowAnyHeader()
-                       .AllowAnyMethod()
-                       .AllowCredentials();
+                if (allowedOrigins.Length > 0)
+                {
+                    builder.WithOrigins(allowedOrigins)
+                           .AllowAnyHeader()
+                           .AllowAnyMethod()
+                           .AllowCredentials();
+                }
+                else
+                {
+                    // Fallback: allow all only when no origins are configured (dev without config)
+                    builder.SetIsOriginAllowed(_ => true)
+                           .AllowAnyHeader()
+                           .AllowAnyMethod()
+                           .AllowCredentials();
+                }
             });
         });
 
         // Swagger / OpenAPI
         services.AddEndpointsApiExplorer();
-        services.AddSwaggerGen();
+        services.AddSwaggerGen(options =>
+        {
+            options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+            {
+                Title = "Vendor E-Commerce API",
+                Version = "v1.0",
+                Description = "Clean Architecture Multi-Vendor E-Commerce API"
+            });
+
+            options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                Description = "JWT Authorization header using the Bearer scheme. Enter your token below."
+            });
+
+            options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+            {
+                {
+                    new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                    {
+                        Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                        {
+                            Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    Array.Empty<string>()
+                }
+            });
+        });
 
         // SignalR & Health Checks
         services.AddSignalR();
-        services.AddHealthChecks();
+        services.AddHealthChecks()
+            .AddSqlServer(
+                configuration.GetConnectionString("DefaultConnection")
+                    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required."),
+                name: "sql-server",
+                tags: ["db", "ready"])
+            .AddRedis(
+                configuration.GetConnectionString("Redis")
+                    ?? throw new InvalidOperationException("ConnectionStrings:Redis is required."),
+                name: "redis",
+                tags: ["cache", "ready"]);
 
         return services;
     }

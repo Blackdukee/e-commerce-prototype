@@ -23,4 +23,10 @@ public interface IPaymentGateway
         Money refundAmount,
         string idempotencyKey,
         CancellationToken ct = default);
+
+    Task<bool> VerifyWebhookSignatureAsync(
+        string payload,
+        string signatureHeader,
+        string secret,
+        CancellationToken ct = default);
 }

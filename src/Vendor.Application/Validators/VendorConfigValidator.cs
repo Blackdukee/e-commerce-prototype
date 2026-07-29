@@ -50,9 +50,9 @@ public sealed class VendorConfigValidator : AbstractValidator<VendorConfig>
             .Custom((email, context) =>
             {
                 if (email == null) return;
-                if (email.Provider == EmailProvider.SendGrid && email.SendGridApiKey == null)
+                if (email.Provider == EmailProvider.Mailtrap && email.MailtrapApiKey == null)
                 {
-                    context.AddFailure("boot.email.sendGridApiKey", "SendGrid API key required when using SendGrid provider.");
+                    context.AddFailure("boot.email.mailtrapApiKey", "Mailtrap API key required when using Mailtrap provider.");
                 }
                 if (email.Provider == EmailProvider.Smtp)
                 {

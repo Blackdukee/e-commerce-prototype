@@ -18,7 +18,7 @@ public class VendorSettingsEndpointTests : IClassFixture<VendorApiFactory>
         _factory = factory;
         Environment.SetEnvironmentVariable("JWT_SECRET", "test_jwt_secret_value_min_32_bytes_long");
         Environment.SetEnvironmentVariable("GOOGLE_CLIENT_SECRET", "test_google_secret");
-        Environment.SetEnvironmentVariable("SG_KEY", "test_sendgrid_key");
+        Environment.SetEnvironmentVariable("MAILTRAP_API_KEY", "test_mailtrap_key");
         Environment.SetEnvironmentVariable("STRIPE_SK", "test_stripe_secret_key");
         Environment.SetEnvironmentVariable("STRIPE_WH", "test_stripe_webhook_secret");
     }

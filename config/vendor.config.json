@@ -22,10 +22,10 @@
         "keyPrefix": "acme"
       },
       "email": {
-        "provider": "SendGrid",
+        "provider": "Mailtrap",
         "senderAddress": "noreply@acme-store.com",
         "senderName": "ACME Store",
-        "sendGridApiKey": "ref:env:SENDGRID_API_KEY"
+        "mailtrapApiKey": "ref:env:29dd17c63226b1e30f05e8aac20efdb3"
       },
       "analytics": {
         "provider": "ga4",
@@ -67,12 +67,20 @@
           "enabled": true,
           "isDefault": true,
           "credentials": {
-            "publicKey": "pk_test_123",
+            "publicKey": "ref:env:STRIPE_PUBLIC_KEY",
             "secretKey": "ref:env:STRIPE_SECRET_KEY"
           },
           "supportedMethods": ["card", "apple_pay"],
           "captureMode": "Automatic",
           "webhookSecret": "ref:env:STRIPE_WEBHOOK_SECRET"
+        },
+        {
+          "providerName": "paymob",
+          "enabled": true,
+          "credentials": {
+            "apiKey": "ref:env:PAYMOB_API_KEY",
+            "integrationId": "5592983"
+          }
         }
       ],
       "shipping": [

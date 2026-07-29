@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Vendor.Application.Interfaces;
@@ -9,7 +11,9 @@ using Vendor.Domain.Interfaces.Adapters;
 using Vendor.Domain.Interfaces.Repositories;
 using Vendor.Domain.ValueObjects;
 using Vendor.Infrastructure.Auth;
+using Vendor.Infrastructure.Caching;
 using Vendor.Infrastructure.Common;
+using Vendor.Infrastructure.Identity;
 using Vendor.Infrastructure.Outbox;
 using Vendor.Infrastructure.Payments;
 using Vendor.Infrastructure.Persistence;
@@ -25,6 +29,20 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddSingleton<OutboxInterceptor>();
+
+        // Redis distributed cache — connection string read from ConnectionStrings:Redis
+        var redisConnectionString = configuration.GetConnectionString("Redis")
+            ?? throw new InvalidOperationException(
+                "ConnectionStrings:Redis is required. Add it to appsettings or set the CONNECTIONSTRINGS__REDIS environment variable.");
+
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConnectionString;
+            options.InstanceName = "vendor:";
+        });
+
+        // Bind ICacheService to the Redis implementation
+        services.AddScoped<ICacheService, RedisCacheService>();
 
         services.AddDbContext<VendorDbContext>((sp, options) =>
         {
@@ -43,6 +61,21 @@ public static class DependencyInjection
             options.AddInterceptors(interceptor);
         });
 
+        services.AddIdentityCore<ApplicationUser>(options =>
+        {
+            options.User.RequireUniqueEmail = true;
+            options.Password.RequireDigit = true;
+            options.Password.RequiredLength = 8;
+            options.Password.RequireUppercase = true;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+            options.Lockout.MaxFailedAccessAttempts = 5;
+        })
+        .AddRoles<ApplicationRole>()
+        .AddEntityFrameworkStores<VendorDbContext>()
+        .AddDefaultTokenProviders();
+
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<VendorDbContext>());
         services.AddScoped<IIdempotencyStore, DbIdempotencyStore>();
 
@@ -52,6 +85,10 @@ public static class DependencyInjection
         services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IPaymentIdempotencyRepository, PaymentIdempotencyRepository>();
+        services.AddScoped<IPaymentLedgerRepository, PaymentLedgerRepository>();
+        services.AddScoped<IWebhookEventRepository, WebhookEventRepository>();
+        services.AddSingleton<Vendor.Application.Common.Interfaces.IIdempotencyLockManager, Vendor.Infrastructure.Payments.Concurrency.InMemoryIdempotencyLockManager>();
         services.AddScoped<IShipmentRepository, ShipmentRepository>();
         services.AddScoped<IPromotionRepository, PromotionRepository>();
         services.AddScoped<IReturnRequestRepository, ReturnRequestRepository>();
@@ -67,8 +104,13 @@ public static class DependencyInjection
         services.AddScoped<IPaymentGateway, StripePaymentGateway>();
         services.AddScoped<ITaxCalculator, FlatTaxCalculator>();
 
-        var jwtSecret = configuration["Jwt:SecretKey"] ?? "super-secret-jwt-key-minimum-32-characters-long!";
-        services.AddScoped<ITokenService>(sp => new JwtTokenService(sp.GetRequiredService<VendorDbContext>(), jwtSecret));
+        // Resolve JWT secret from configuration — validated at startup by IOptions<JwtOptions> in the API layer
+        var jwtSecret = configuration["Jwt:SecretKey"]
+            ?? throw new InvalidOperationException(
+                "Jwt:SecretKey configuration is required. Set it via environment variable or appsettings.");
+        services.AddScoped<ITokenService>(sp =>
+            new JwtTokenService(sp.GetRequiredService<VendorDbContext>(), jwtSecret));
+        services.AddScoped<IExternalAuthService, ExternalAuthService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
         // Default VendorConfig singleton for boot
@@ -83,7 +125,7 @@ public static class DependencyInjection
         var boot = new VendorBootConfig(
             new AuthConfig(60, 30, new SecretReference("ref:env:JWT_SECRET"), null, null, null, null, 8, true, true, false),
             new CachingConfig(CacheProvider.Memory, null, "acme"),
-            new EmailConfig(EmailProvider.SendGrid, "noreply@acme.com", "ACME", new SecretReference("ref:env:SG_KEY"), null, null, null, null, null),
+            new EmailConfig(EmailProvider.Mailtrap, "noreply@acme.com", "ACME", new SecretReference("ref:env:MAILTRAP_API_KEY"), null, null, null, null, null),
             new AnalyticsConfig("ga4", "G-12345", false, null, true)
         );
         var runtime = new VendorRuntimeConfig(

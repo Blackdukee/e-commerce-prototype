@@ -13,14 +13,12 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
     where TRequest : ICommand<TResponse>
     where TResponse : IResult
 {
-    public async Task<TResponse> Handle(
+    public Task<TResponse> Handle(
         TRequest request,
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        await unitOfWork.BeginTransactionAsync(cancellationToken);
-
-        try
+        return unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var response = await next();
 
@@ -28,18 +26,9 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
             {
                 logger.LogWarning("Request {RequestName} failed with error '{ErrorCode}'. Rolling back transaction.",
                     typeof(TRequest).Name, response.Error.Code);
-                await unitOfWork.RollbackAsync(cancellationToken);
-                return response;
             }
 
-            await unitOfWork.CommitAsync(cancellationToken);
             return response;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Unhandled exception in {RequestName}. Rolling back transaction.", typeof(TRequest).Name);
-            await unitOfWork.RollbackAsync(cancellationToken);
-            throw;
-        }
+        }, cancellationToken);
     }
 }

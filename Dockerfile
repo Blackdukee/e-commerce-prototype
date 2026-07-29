@@ -26,6 +26,9 @@ RUN dotnet publish Vendor.Api.csproj -c Release -o /app/publish /p:UseAppHost=fa
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
+# Install curl for container health check
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user and group
 RUN groupadd -g 10001 appgroup && \
     useradd -u 10001 -g appgroup -s /bin/false appuser && \

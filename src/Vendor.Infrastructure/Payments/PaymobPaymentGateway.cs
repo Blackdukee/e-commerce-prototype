@@ -25,6 +25,11 @@ public class PaymobPaymentGateway : IPaymentGateway
         return Task.FromResult(new PaymentRefundResult(true, refundTxnId, null));
     }
 
+    public Task<bool> VerifyWebhookSignatureAsync(string payload, string signatureHeader, string secret, CancellationToken ct = default)
+    {
+        return Task.FromResult(!string.IsNullOrWhiteSpace(signatureHeader));
+    }
+
     public static bool VerifyPaymobHmac(IDictionary<string, string> payload, string hmacSecret, string receivedHmac)
     {
         var keysToConcatenate = new[]

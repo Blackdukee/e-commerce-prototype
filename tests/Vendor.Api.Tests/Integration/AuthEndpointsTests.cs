@@ -28,7 +28,12 @@ public class AuthEndpointsTests : IClassFixture<VendorApiFactory>
     [Fact]
     public async Task Login_ValidCredentials_ReturnsOk()
     {
-        var payload = new LoginRequest("admin@acme-store.com", "AdminPass123!");
+        var email = $"user.{Guid.NewGuid():N}@example.com";
+        var password = "Password123!";
+        var regPayload = new RegisterRequest(email, "Test", "User", password);
+        await _client.PostAsJsonAsync("/api/v1/auth/register", regPayload);
+
+        var payload = new LoginRequest(email, password);
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", payload);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);

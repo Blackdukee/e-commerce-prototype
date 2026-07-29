@@ -47,24 +47,92 @@ public class ProductRepository(VendorDbContext context) : IProductRepository
         => await context.Products.AnyAsync(p => p.Id == id, ct);
 }
 
-public class CustomerRepository(VendorDbContext context) : ICustomerRepository
+public class CustomerRepository(
+    VendorDbContext context,
+    Microsoft.AspNetCore.Identity.UserManager<Vendor.Infrastructure.Identity.ApplicationUser>? userManager = null) : ICustomerRepository
 {
     public async Task<Customer?> GetByIdAsync(CustomerId id, CancellationToken ct = default)
-        => await context.Customers.FirstOrDefaultAsync(c => c.Id == id, ct);
+    {
+        if (userManager != null)
+        {
+            var appUser = await userManager.FindByIdAsync(id.Value.ToString());
+            if (appUser != null) return appUser.ToDomainEntity();
+        }
+
+        return await context.Customers.FirstOrDefaultAsync(c => c.Id == id, ct);
+    }
 
     public async Task<Customer?> GetByEmailAsync(string email, CancellationToken ct = default)
-        => await context.Customers.FirstOrDefaultAsync(c => c.Email == email, ct);
+    {
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        if (userManager != null)
+        {
+            var appUser = await userManager.FindByEmailAsync(normalizedEmail);
+            if (appUser != null) return appUser.ToDomainEntity();
+        }
+
+        return await context.Customers.FirstOrDefaultAsync(c => c.Email == normalizedEmail, ct);
+    }
 
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
-        => await context.Customers.AnyAsync(c => c.Email == email, ct);
+    {
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        if (userManager != null)
+        {
+            var appUser = await userManager.FindByEmailAsync(normalizedEmail);
+            if (appUser != null) return true;
+        }
+
+        return await context.Customers.AnyAsync(c => c.Email == normalizedEmail, ct);
+    }
 
     public async Task AddAsync(Customer customer, CancellationToken ct = default)
-        => await context.Customers.AddAsync(customer, ct);
-
-    public Task UpdateAsync(Customer customer, CancellationToken ct = default)
     {
+        if (userManager != null)
+        {
+            var appUser = new Vendor.Infrastructure.Identity.ApplicationUser
+            {
+                Id = customer.Id.Value,
+                UserName = customer.Email,
+                Email = customer.Email,
+                EmailConfirmed = true,
+                FirstName = customer.FirstName,
+                LastName = customer.LastName,
+                CustomerType = customer.CustomerType,
+                Role = customer.Role,
+                Status = customer.Status,
+                AnalyticsConsent = customer.AnalyticsConsent,
+                CreatedAtUtc = customer.CreatedAtUtc,
+                RegisteredAtUtc = customer.RegisteredAtUtc
+            };
+
+            var result = await userManager.CreateAsync(appUser);
+            if (result.Succeeded) return;
+        }
+
+        await context.Customers.AddAsync(customer, ct);
+    }
+
+    public async Task UpdateAsync(Customer customer, CancellationToken ct = default)
+    {
+        if (userManager != null)
+        {
+            var appUser = await userManager.FindByIdAsync(customer.Id.Value.ToString());
+            if (appUser != null)
+            {
+                appUser.FirstName = customer.FirstName;
+                appUser.LastName = customer.LastName;
+                appUser.CustomerType = customer.CustomerType;
+                appUser.Role = customer.Role;
+                appUser.Status = customer.Status;
+                appUser.AnalyticsConsent = customer.AnalyticsConsent;
+
+                await userManager.UpdateAsync(appUser);
+                return;
+            }
+        }
+
         context.Customers.Update(customer);
-        return Task.CompletedTask;
     }
 
     public async Task<(IReadOnlyList<Customer> Items, int TotalCount)> GetPagedAsync(

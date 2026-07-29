@@ -6,6 +6,7 @@ public interface IUnitOfWork
     Task CommitAsync(CancellationToken ct = default);
     Task RollbackAsync(CancellationToken ct = default);
     Task<int> SaveChangesAsync(CancellationToken ct = default);
+    Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken ct = default);
 }
 
 public interface IIdempotencyStore

@@ -22,11 +22,14 @@ builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
-// Auto-apply EF Core database migrations on startup
+// Auto-apply EF Core database migrations on startup when using a relational database provider
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<VendorDbContext>();
-    dbContext.Database.Migrate();
+    if (dbContext.Database.IsRelational())
+    {
+        dbContext.Database.Migrate();
+    }
 }
 
 // Ordered Middleware Pipeline (9 Stages)
