@@ -10,6 +10,7 @@ using Vendor.Domain.Aggregates.Product;
 using Vendor.Domain.Aggregates.Promotion;
 using Vendor.Domain.Aggregates.ReturnRequest;
 using Vendor.Domain.Aggregates.Shipment;
+using Vendor.Domain.Entities;
 using Vendor.Infrastructure.Auth;
 using Vendor.Infrastructure.Identity;
 using Vendor.Infrastructure.Outbox;
@@ -33,6 +34,7 @@ public class VendorDbContext(DbContextOptions<VendorDbContext> options) : Identi
     public DbSet<PaymentIdempotencyKey> PaymentIdempotencyKeys => Set<PaymentIdempotencyKey>();
     public DbSet<PaymentLedgerEntry> PaymentLedgerEntries => Set<PaymentLedgerEntry>();
     public DbSet<WebhookEventEntry> WebhookEventEntries => Set<WebhookEventEntry>();
+    public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
