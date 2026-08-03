@@ -71,7 +71,7 @@ public static class AdminCustomerEndpoints
             var result = await mediator.Send(new PromoteCustomerCommand(id), ct);
             return result.ToHttpResult();
         })
-        .RequireRateLimiting("auth");
+        .RequireRateLimiting("auth-policy");
 
         // 6. Demote Admin to Customer (SuperAdmin-only, Auth rate limiting)
         customers.MapPost("/{id:guid}/demote", async (Guid id, ISender mediator, CancellationToken ct) =>
@@ -79,7 +79,7 @@ public static class AdminCustomerEndpoints
             var result = await mediator.Send(new DemoteCustomerCommand(id), ct);
             return result.ToHttpResult();
         })
-        .RequireRateLimiting("auth");
+        .RequireRateLimiting("auth-policy");
 
         // 7. Get Audit Log (SuperAdmin-only)
         customers.MapGet("/{id:guid}/audit-log", async (Guid id, int pageIndex, int pageSize, ISender mediator, CancellationToken ct) =>

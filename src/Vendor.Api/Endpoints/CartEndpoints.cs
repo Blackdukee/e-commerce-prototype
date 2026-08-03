@@ -17,7 +17,8 @@ public static class CartEndpoints
     public static RouteGroupBuilder MapCartEndpoints(this RouteGroupBuilder group)
     {
         var cart = group.MapGroup("/cart")
-            .WithTags("Cart");
+            .WithTags("Cart")
+            .RequireRateLimiting("cart-checkout-policy");
 
         cart.MapGet("/", async (Guid? cartId, ICurrentUserService user, ISender mediator, CancellationToken ct) =>
         {
@@ -99,7 +100,8 @@ public static class CartEndpoints
             var command = new CheckoutOrderCommand(cartId, shippingAddress, idempotencyKey);
             var result = await mediator.Send(command, ct);
             return result.IsSuccess ? Results.Created($"/api/v1/orders/{result.Value?.Id}", result.Value) : result.ToHttpResult();
-        }).WithTags("Orders");
+        }).WithTags("Orders")
+        .RequireRateLimiting("cart-checkout-policy");
 
         return group;
     }

@@ -13,8 +13,7 @@ public static class ProductEndpoints
     public static RouteGroupBuilder MapProductEndpoints(this RouteGroupBuilder group)
     {
         var publicProducts = group.MapGroup("/products")
-            .WithTags("Products")
-            .RequireRateLimiting("catalog");
+            .WithTags("Products");
 
         publicProducts.MapGet("/", async (int? page, int? pageSize, string? search, ISender mediator, CancellationToken ct) =>
         {

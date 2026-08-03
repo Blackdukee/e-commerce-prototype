@@ -14,7 +14,7 @@ public static class AuthEndpoints
     {
         var auth = group.MapGroup("/auth")
             .WithTags("Auth")
-            .RequireRateLimiting("auth");
+            .RequireRateLimiting("auth-policy");
 
         auth.MapPost("/register", async (RegisterRequest req, ISender mediator, HttpContext ctx) =>
         {

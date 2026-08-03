@@ -20,6 +20,7 @@ builder.Host.UseSerilog();
 
 // Add API, Application, and Infrastructure Services
 builder.Services.AddApiLayerServices(builder.Configuration);
+builder.Services.AddCustomRateLimiting();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 

@@ -74,39 +74,6 @@ public static class ServiceExtensions
             options.SubstituteApiVersionInUrl = true;
         });
 
-        // Rate Limiting Policies
-        services.AddRateLimiter(options =>
-        {
-            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-            options.AddFixedWindowLimiter("auth", opt =>
-            {
-                opt.Window = TimeSpan.FromMinutes(1);
-                opt.PermitLimit = 10;
-                opt.QueueLimit = 0;
-            });
-
-            options.AddFixedWindowLimiter("catalog", opt =>
-            {
-                opt.Window = TimeSpan.FromMinutes(1);
-                opt.PermitLimit = 300;
-                opt.QueueLimit = 10;
-            });
-
-            options.AddFixedWindowLimiter("webhook", opt =>
-            {
-                opt.Window = TimeSpan.FromMinutes(1);
-                opt.PermitLimit = 50;
-                opt.QueueLimit = 5;
-            });
-
-            options.AddFixedWindowLimiter("default", opt =>
-            {
-                opt.Window = TimeSpan.FromMinutes(1);
-                opt.PermitLimit = 100;
-                opt.QueueLimit = 10;
-            });
-        });
 
         // CORS — origins driven by configuration (env-specific), not wildcard
         var allowedOrigins = configuration
