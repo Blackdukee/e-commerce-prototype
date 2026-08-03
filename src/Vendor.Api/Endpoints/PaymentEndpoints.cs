@@ -128,55 +128,7 @@ public static class PaymentEndpoints
             return Results.Ok(new PaymentDto(id, Guid.NewGuid(), "stripe", "Refunded", req.Amount, "re_123", DateTime.UtcNow));
         });
 
-        // Webhook ingestion endpoints
-        var webhooks = group.MapGroup("/webhooks")
-            .WithTags("Webhooks");
-
-        webhooks.MapPost("/{providerName}", async (string providerName, HttpContext ctx, WebhookApiPayload payload, ISender mediator) =>
-        {
-            var sigHeader = ctx.Request.Headers["Stripe-Signature"].ToString();
-            if (string.IsNullOrEmpty(sigHeader))
-            {
-                sigHeader = ctx.Request.Headers["X-Paymob-Signature"].ToString();
-            }
-            if (string.IsNullOrEmpty(sigHeader))
-            {
-                sigHeader = ctx.Request.Headers["Paypal-Transmission-Sig"].ToString();
-            }
-
-            var eventId = string.IsNullOrWhiteSpace(payload.EventId) ? $"evt_{Guid.NewGuid():N}" : payload.EventId;
-            var eventType = string.IsNullOrWhiteSpace(payload.EventType) ? "payment_intent.succeeded" : payload.EventType;
-            var paymentId = payload.PaymentId ?? Guid.NewGuid();
-            var amount = payload.Amount ?? 100m;
-            var currency = string.IsNullOrWhiteSpace(payload.Currency) ? "USD" : payload.Currency;
-
-            var command = new ProcessWebhookCommand(
-                providerName,
-                sigHeader,
-                RawPayload: System.Text.Json.JsonSerializer.Serialize(payload),
-                eventId,
-                eventType,
-                paymentId,
-                amount,
-                currency,
-                payload.GatewayReferenceId
-            );
-
-            var result = await mediator.Send(command);
-
-            if (result.IsFailure)
-            {
-                if (result.Error.Code == "Auth.Unauthorized")
-                {
-                    return Results.Unauthorized();
-                }
-
-                return Results.BadRequest(new { error = result.Error.Description });
-            }
-
-            return Results.Ok(result.Value);
-        });
-
         return group;
     }
 }
+

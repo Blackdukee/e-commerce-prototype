@@ -25,6 +25,8 @@ using Vendor.Infrastructure.Payments;
 using Vendor.Infrastructure.Persistence;
 using Vendor.Infrastructure.Persistence.Repositories;
 using Vendor.Infrastructure.Tax;
+using Vendor.Infrastructure.Payments.Webhooks;
+
 
 namespace Vendor.Infrastructure;
 
@@ -146,6 +148,12 @@ public static class DependencyInjection
         services.AddSingleton<IPaymentGatewayFactory, PaymentGatewayFactory>();
         services.AddScoped<IPaymentGateway, StripePaymentGateway>();
         services.AddScoped<ITaxCalculator, FlatTaxCalculator>();
+        services.AddScoped<IOutboxService, OutboxService>();
+        services.AddScoped<IWebhookParser, StripeWebhookParser>();
+        services.AddScoped<IWebhookParser, PaymobWebhookParser>();
+        services.AddScoped<IWebhookParser, PaypalWebhookParser>();
+        services.AddScoped<IWebhookParserFactory, WebhookParserFactory>();
+
 
         // Resolve JWT secret from configuration — validated at startup by IOptions<JwtOptions> in the API layer
         var jwtSecret = configuration["Jwt:SecretKey"]

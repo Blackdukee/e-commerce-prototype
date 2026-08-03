@@ -12,6 +12,12 @@ public record PaymentFailedEvent(PaymentId PaymentId, OrderId OrderId, string Fa
 
 public record PaymentRefundedEvent(PaymentId PaymentId, OrderId OrderId, Money RefundAmount, Money TotalRefunded, DateTime RefundedAtUtc) : DomainEvent;
 
+public record OrderPaymentSucceededEvent(OrderId OrderId, string Provider, string GatewayEventId, Money Amount, DateTime ProcessedAtUtc) : DomainEvent;
+
+public record OrderPaymentFailedEvent(OrderId OrderId, string Provider, string GatewayEventId, string FailureReason, DateTime ProcessedAtUtc) : DomainEvent;
+
+
 public record ShipmentInTransitEvent(ShipmentId ShipmentId, OrderId OrderId, string TrackingNumber, string CarrierCode, DateTime ShippedAtUtc) : DomainEvent;
 
 public record ShipmentDeliveredEvent(ShipmentId ShipmentId, OrderId OrderId, DateTime DeliveredAtUtc) : DomainEvent;
+

@@ -28,6 +28,7 @@ public static class WebApplicationExtensions
         v1.MapPromotionEndpoints();
         v1.MapAdminEndpoints();
         v1.MapVendorSettingsEndpoints();
+        v1.MapWebhookEndpoints();
 
         // SignalR WebSockets Hub endpoint
         app.MapHub<AdminNotificationHub>("/hubs/admin");
