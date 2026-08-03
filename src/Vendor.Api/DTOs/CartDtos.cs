@@ -25,7 +25,8 @@ public record CartItemDto(
 public record CheckoutRequest(
     AddressDto ShippingAddress,
     string ShippingServiceCode,
-    string PaymentProvider
+    string PaymentProvider,
+    Guid? CartId = null
 );
 
 public record CheckoutResponseDto(

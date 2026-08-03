@@ -38,7 +38,11 @@ public class ProductEndpointsTests : IClassFixture<VendorApiFactory>
     public async Task GetProductBySlug_ReturnsOk()
     {
         var client = _factory.CreateClient();
-        var response = await client.GetAsync("/api/v1/products/slug/sample-product");
+        client.WithAdminBearerToken();
+        var request = new CreateProductRequest("Slug Test Item", "slug-test-item", "Description", 10m, "USD", [], [], []);
+        await client.PostAsJsonAsync("/api/v1/products", request);
+
+        var response = await client.GetAsync("/api/v1/products/slug/slug-test-item");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }

@@ -1,6 +1,7 @@
 using MediatR;
 using Vendor.Application.Common.Messaging;
 using Vendor.Application.Common.Results;
+using Vendor.Application.Interfaces;
 using Vendor.Domain.Aggregates.Cart;
 using Vendor.Domain.Aggregates.Customer;
 using Vendor.Domain.Aggregates.Product;
@@ -71,6 +72,77 @@ public class GetCartByIdQueryHandler(ICartRepository cartRepository) : IRequestH
     {
         var cart = await cartRepository.GetByIdAsync(new CartId(request.CartId), ct);
         if (cart == null) return Error.NotFound("Cart", request.CartId);
+        return CartDto.FromDomain(cart);
+    }
+}
+
+public class AddCartItemCommandHandler(ICartRepository cartRepository, IProductRepository productRepository, IUnitOfWork unitOfWork) : IRequestHandler<AddCartItemCommand, Result<CartDto>>
+{
+    public async Task<Result<CartDto>> Handle(AddCartItemCommand request, CancellationToken ct)
+    {
+        var cart = await cartRepository.GetByIdAsync(new CartId(request.CartId), ct);
+        var isNew = false;
+        if (cart == null)
+        {
+            cart = new Domain.Aggregates.Cart.Cart(new CartId(request.CartId), null, "guest-session");
+            isNew = true;
+        }
+
+        var product = await productRepository.GetByVariantIdAsync(new ProductVariantId(request.VariantId), ct);
+        if (product == null) return Error.NotFound("ProductVariant", request.VariantId);
+
+        var variant = product.Variants.FirstOrDefault(v => v.Id.Value == request.VariantId);
+        if (variant == null) return Error.NotFound("ProductVariant", request.VariantId);
+
+        var unitPrice = product.BasePrice.Amount + variant.PriceAdjustment.Amount;
+        var currency = product.BasePrice.Currency;
+
+        cart.AddItem(new CartItem(cart.Id, variant.Id, request.Quantity, new Money(unitPrice, currency)));
+
+        if (isNew)
+        {
+            await cartRepository.AddAsync(cart, ct);
+        }
+        else
+        {
+            await cartRepository.UpdateAsync(cart, ct);
+        }
+
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return CartDto.FromDomain(cart);
+    }
+}
+
+public class UpdateCartItemQuantityCommandHandler(ICartRepository cartRepository, IUnitOfWork unitOfWork) : IRequestHandler<UpdateCartItemQuantityCommand, Result<CartDto>>
+{
+    public async Task<Result<CartDto>> Handle(UpdateCartItemQuantityCommand request, CancellationToken ct)
+    {
+        var cart = await cartRepository.GetByIdAsync(new CartId(request.CartId), ct);
+        if (cart == null) return Error.NotFound("Cart", request.CartId);
+
+        var item = cart.Items.FirstOrDefault(i => i.ProductVariantId.Value == request.VariantId);
+        if (item == null) return Error.NotFound("CartItem", request.VariantId);
+
+        item.UpdateQuantity(request.Quantity);
+        await cartRepository.UpdateAsync(cart, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return CartDto.FromDomain(cart);
+    }
+}
+
+public class RemoveCartItemCommandHandler(ICartRepository cartRepository, IUnitOfWork unitOfWork) : IRequestHandler<RemoveCartItemCommand, Result<CartDto>>
+{
+    public async Task<Result<CartDto>> Handle(RemoveCartItemCommand request, CancellationToken ct)
+    {
+        var cart = await cartRepository.GetByIdAsync(new CartId(request.CartId), ct);
+        if (cart == null) return Error.NotFound("Cart", request.CartId);
+
+        cart.RemoveItem(new ProductVariantId(request.VariantId));
+        await cartRepository.UpdateAsync(cart, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+
         return CartDto.FromDomain(cart);
     }
 }

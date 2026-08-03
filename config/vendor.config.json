@@ -10,8 +10,8 @@
         "tokenLifetimeMinutes": 60,
         "refreshTokenLifetimeDays": 30,
         "jwtSecret": "ref:env:JWT_SECRET",
-        "googleClientId": "123456.apps.googleusercontent.com",
-        "googleClientSecret": "ref:env:GOOGLE_CLIENT_SECRET",
+        "googleClientId": "REDACTED_GOOGLE_CLIENT_ID",
+        "googleClientSecret": "ref:env:REDACTED_GOOGLE_CLIENT_SECRET",
         "passwordMinLength": 8,
         "passwordRequireUppercase": true,
         "passwordRequireDigit": true,
@@ -22,10 +22,13 @@
         "keyPrefix": "acme"
       },
       "email": {
-        "provider": "Mailtrap",
-        "senderAddress": "noreply@acme-store.com",
-        "senderName": "ACME Store",
-        "mailtrapApiKey": "ref:env:29dd17c63226b1e30f05e8aac20efdb3"
+        "provider": "Smtp",
+        "senderAddress": "noreply@vendor.com",
+        "senderName": "Vendor Store",
+        "smtpHost": "sandbox.smtp.mailtrap.io",
+        "smtpPort": 2525,
+        "smtpUsername": "74e279fce2c3bb",
+        "smtpPassword": "ref:env:8c6df33d3bb365"
       },
       "analytics": {
         "provider": "ga4",
@@ -45,9 +48,15 @@
       },
       "locale": {
         "defaultLanguage": "en",
-        "supportedLanguages": ["en", "ar"],
+        "supportedLanguages": [
+          "en",
+          "ar"
+        ],
         "defaultCurrency": "USD",
-        "supportedCurrencies": ["USD", "EUR"],
+        "supportedCurrencies": [
+          "USD",
+          "EUR"
+        ],
         "timezone": "America/New_York",
         "direction": "ltr"
       },
@@ -67,10 +76,13 @@
           "enabled": true,
           "isDefault": true,
           "credentials": {
-            "publicKey": "ref:env:STRIPE_PUBLIC_KEY",
-            "secretKey": "ref:env:STRIPE_SECRET_KEY"
+            "publicKey": "pk_test_51R0nWXBLtTuFPq2ghYUwqXJZQ2bqcWcxKnqqMEAxVdQ2eGviVk1nQXxG6SECgP7I0N4WNvXqRLgmdaasFpn3IoQX00CjkXPYhs",
+            "secretKey": "ref:env:REDACTED_STRIPE_SECRET_KEY"
           },
-          "supportedMethods": ["card", "apple_pay"],
+          "supportedMethods": [
+            "card",
+            "apple_pay"
+          ],
           "captureMode": "Automatic",
           "webhookSecret": "ref:env:STRIPE_WEBHOOK_SECRET"
         },
@@ -78,7 +90,7 @@
           "providerName": "paymob",
           "enabled": true,
           "credentials": {
-            "apiKey": "ref:env:PAYMOB_API_KEY",
+            "apiKey": "ref:env:REDACTED_PAYMOB_API_KEY",
             "integrationId": "5592983"
           }
         }

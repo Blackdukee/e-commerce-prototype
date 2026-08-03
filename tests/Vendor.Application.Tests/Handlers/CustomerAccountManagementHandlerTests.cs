@@ -78,9 +78,11 @@ public class CustomerAccountManagementHandlerTests
         var customerId = CustomerId.New();
         var customer = new Customer(customerId, "suspended@example.com", "User", "Test", CustomerType.Registered, false, CustomerRole.Customer, CustomerStatus.Suspended);
 
-        _customerRepository.GetByEmailAsync("suspended@example.com", Arg.Any<CancellationToken>()).Returns(customer);
+        var identityAuth = Substitute.For<IIdentityAuthService>();
+        identityAuth.PasswordSignInAsync("suspended@example.com", "password123", Arg.Any<CancellationToken>())
+            .Returns(new IdentitySignInResult(false, Guid.Empty, customerId.Value, false, false, "ACCOUNT_SUSPENDED", "Customer account is suspended."));
 
-        var handler = new LoginWithPasswordCommandHandler(_customerRepository, _tokenService);
+        var handler = new LoginWithPasswordCommandHandler(identityAuth, _customerRepository, _tokenService);
         var result = await handler.Handle(new LoginWithPasswordCommand("suspended@example.com", "password123"), CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();

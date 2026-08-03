@@ -69,7 +69,7 @@ public class CheckoutOrchestrationTests
         var variant = new ProductVariant(variantId, productId, "SKU-001", Money.Zero("USD"), 10, weight, dimensions);
         product.AddVariant(variant);
 
-        _productRepository.GetByIdAsync(productId, Arg.Any<CancellationToken>()).Returns(product);
+        _productRepository.GetByVariantIdAsync(variantId, Arg.Any<CancellationToken>()).Returns(product);
         _taxCalculator.CalculateTaxAsync(Arg.Any<IReadOnlyList<OrderLine>>(), Arg.Any<Address>(), "USD", Arg.Any<CancellationToken>())
             .Returns(new Money(5m, "USD"));
         _dateTimeProvider.UtcNow.Returns(new DateTime(2026, 7, 25, 12, 0, 0, DateTimeKind.Utc));

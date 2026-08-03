@@ -76,4 +76,16 @@ public class ProductVariant : Entity<ProductVariantId>
 
         StockQuantity += quantity;
     }
+
+    public void UpdateDetails(Money priceAdjustment, int stockQuantity, Weight weight)
+    {
+        if (stockQuantity < 0)
+        {
+            throw new BusinessRuleViolationException("Stock quantity cannot be negative.", nameof(ProductVariant));
+        }
+
+        PriceAdjustment = priceAdjustment;
+        StockQuantity = stockQuantity;
+        Weight = weight;
+    }
 }

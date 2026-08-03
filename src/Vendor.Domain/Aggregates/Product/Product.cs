@@ -59,6 +59,20 @@ public class Product : AggregateRoot<ProductId>
         CreatedAtUtc = DateTime.UtcNow;
     }
 
+    public void UpdateDetails(string name, Slug slug, Money basePrice, string? description = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
+        if (basePrice.Amount < 0m)
+        {
+            throw new BusinessRuleViolationException("Base price cannot be negative.", nameof(Product));
+        }
+
+        Name = name.Trim();
+        Slug = slug;
+        BasePrice = basePrice;
+        Description = description?.Trim();
+    }
+
     public void AddVariant(ProductVariant variant)
     {
         ArgumentNullException.ThrowIfNull(variant, nameof(variant));

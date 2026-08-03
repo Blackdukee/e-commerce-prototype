@@ -1,5 +1,5 @@
-using System.Reflection;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Vendor.Domain.Abstractions;
 
@@ -7,46 +7,48 @@ namespace Vendor.Infrastructure.Outbox;
 
 public sealed class OutboxInterceptor : SaveChangesInterceptor
 {
+    public override InterceptionResult<int> SavingChanges(
+        DbContextEventData eventData,
+        InterceptionResult<int> result)
+    {
+        ProcessOutboxEvents(eventData.Context);
+        return base.SavingChanges(eventData, result);
+    }
+
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        if (eventData.Context is null)
-        {
-            return base.SavingChangesAsync(eventData, result, cancellationToken);
-        }
+        ProcessOutboxEvents(eventData.Context);
+        return base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
 
-        var dbContext = eventData.Context;
+    private static void ProcessOutboxEvents(DbContext? dbContext)
+    {
+        if (dbContext is null) return;
 
         var outboxMessages = new List<OutboxMessage>();
 
         foreach (var entry in dbContext.ChangeTracker.Entries())
         {
-            var entityType = entry.Entity.GetType();
-            var domainEventsProp = entityType.GetProperty("DomainEvents", BindingFlags.Public | BindingFlags.Instance);
-            var clearEventsMethod = entityType.GetMethod("ClearDomainEvents", BindingFlags.Public | BindingFlags.Instance);
-
-            if (domainEventsProp != null && clearEventsMethod != null)
+            if (entry.Entity is IHasDomainEvents entityWithEvents)
             {
-                if (domainEventsProp.GetValue(entry.Entity) is IEnumerable<IDomainEvent> events)
+                var events = entityWithEvents.DomainEvents.ToList();
+                if (events.Count > 0)
                 {
-                    var eventList = events.ToList();
-                    if (eventList.Count > 0)
-                    {
-                        clearEventsMethod.Invoke(entry.Entity, null);
+                    entityWithEvents.ClearDomainEvents();
 
-                        foreach (var domainEvent in eventList)
+                    foreach (var domainEvent in events)
+                    {
+                        outboxMessages.Add(new OutboxMessage
                         {
-                            outboxMessages.Add(new OutboxMessage
-                            {
-                                Id = domainEvent.EventId,
-                                Type = domainEvent.GetType().AssemblyQualifiedName!,
-                                Content = JsonSerializer.Serialize(domainEvent, domainEvent.GetType()),
-                                OccurredOnUtc = domainEvent.OccurredOnUtc,
-                                RetryCount = 0
-                            });
-                        }
+                            Id = domainEvent.EventId,
+                            Type = domainEvent.GetType().AssemblyQualifiedName!,
+                            Content = JsonSerializer.Serialize(domainEvent, domainEvent.GetType()),
+                            OccurredOnUtc = domainEvent.OccurredOnUtc,
+                            RetryCount = 0
+                        });
                     }
                 }
             }
@@ -56,7 +58,5 @@ public sealed class OutboxInterceptor : SaveChangesInterceptor
         {
             dbContext.Set<OutboxMessage>().AddRange(outboxMessages);
         }
-
-        return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 }

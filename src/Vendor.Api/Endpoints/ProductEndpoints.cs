@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Vendor.Api.DTOs;
+using Vendor.Api.Extensions;
+using Vendor.Application.Modules.Products;
 
 namespace Vendor.Api.Endpoints;
 
@@ -14,96 +16,89 @@ public static class ProductEndpoints
             .WithTags("Products")
             .RequireRateLimiting("catalog");
 
-        publicProducts.MapGet("/", async (int? page, int? pageSize, string? category, string? tag, string? search, ISender mediator) =>
+        publicProducts.MapGet("/", async (int? page, int? pageSize, string? search, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(new ProductListResponse(
-                new[] { new ProductSummaryDto(Guid.NewGuid(), "Sample Product", "sample-product", 49.99m, "USD", "Active", new[] { "https://img.svg" }) },
-                1, page ?? 1, pageSize ?? 20
-            ));
+            var pIndex = (page ?? 1) - 1;
+            var pSize = Math.Min(pageSize ?? 20, 100);
+            var result = await mediator.Send(new SearchProductsQuery(search, pIndex <= 0 ? 0 : pIndex, pSize <= 0 ? 20 : pSize), ct);
+            return result.ToHttpResult();
         });
 
-        publicProducts.MapPost("/", async (CreateProductRequest req, HttpContext context, ISender mediator) =>
+        publicProducts.MapPost("/", async (CreateProductRequest req, HttpContext context, ISender mediator, CancellationToken ct) =>
         {
-            if (!context.User.IsInRole("VendorAdmin") && !context.User.IsInRole("Admin"))
+            if (!context.User.IsInRole("VendorAdmin") && !context.User.IsInRole("Admin") && !context.User.IsInRole("SuperAdmin"))
             {
                 return Results.Forbid();
             }
-            return Results.Created($"/api/v1/products/{Guid.NewGuid()}", req);
+            var command = new CreateProductCommand(req.Name, req.Slug, req.BasePriceAmount, req.Currency, 3, req.Description);
+            var result = await mediator.Send(command, ct);
+            return result.ToCreatedHttpResult($"/api/v1/products/{result.Value?.Id}");
         })
         .RequireAuthorization();
 
-        publicProducts.MapGet("/{id:guid}", async (Guid id, ISender mediator) =>
+        publicProducts.MapGet("/{id:guid}", async (Guid id, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(new ProductDetailDto(
-                id, "Sample Product", "sample-product", "Sample description", 49.99m, "USD", "Active",
-                new[] { "tag1" }, new[] { "cat1" }, new[] { "https://img.svg" }, Array.Empty<ProductVariantDto>()
-            ));
+            var result = await mediator.Send(new GetProductByIdQuery(id), ct);
+            return result.ToHttpResult();
         });
 
-        publicProducts.MapGet("/slug/{slug}", async (string slug, ISender mediator) =>
+        publicProducts.MapGet("/slug/{slug}", async (string slug, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(new ProductDetailDto(
-                Guid.NewGuid(), "Sample Product", slug, "Sample description", 49.99m, "USD", "Active",
-                new[] { "tag1" }, new[] { "cat1" }, new[] { "https://img.svg" }, Array.Empty<ProductVariantDto>()
-            ));
+            var result = await mediator.Send(new GetProductBySlugQuery(slug), ct);
+            return result.ToHttpResult();
         });
 
         var adminProducts = group.MapGroup("/admin/products")
             .WithTags("Admin Products")
             .RequireAuthorization();
 
-        adminProducts.MapPost("/", async (CreateProductRequest req, ISender mediator) =>
+        adminProducts.MapPost("/", async (CreateProductRequest req, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Created($"/api/v1/products/{Guid.NewGuid()}", req);
+            var command = new CreateProductCommand(req.Name, req.Slug, req.BasePriceAmount, req.Currency, 3, req.Description);
+            var result = await mediator.Send(command, ct);
+            return result.ToCreatedHttpResult($"/api/v1/products/{result.Value?.Id}");
         });
 
-        adminProducts.MapPut("/{id:guid}", async (Guid id, UpdateProductRequest req, ISender mediator) =>
+        adminProducts.MapPut("/{id:guid}", async (Guid id, UpdateProductRequest req, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(req);
+            var command = new UpdateProductCommand(id, req.Name ?? "", req.Slug ?? "", req.BasePriceAmount ?? 0m, req.Description);
+            var result = await mediator.Send(command, ct);
+            return result.ToHttpResult();
         });
 
-        adminProducts.MapPut("/{id:guid}/stock", async (Guid id, AdjustStockRequest req, ISender mediator) =>
+        adminProducts.MapPost("/{id:guid}/activate", async (Guid id, ISender mediator, CancellationToken ct) =>
         {
-            return Results.NoContent();
+            var result = await mediator.Send(new ActivateProductCommand(id), ct);
+            return result.ToHttpResult();
         });
 
-        adminProducts.MapPost("/{id:guid}/activate", async (Guid id, ISender mediator) =>
+        adminProducts.MapPost("/{id:guid}/deactivate", async (Guid id, ISender mediator, CancellationToken ct) =>
         {
-            return Results.NoContent();
+            var result = await mediator.Send(new DeactivateProductCommand(id), ct);
+            return result.ToHttpResult();
         });
 
-        adminProducts.MapPost("/{id:guid}/deactivate", async (Guid id, ISender mediator) =>
+        adminProducts.MapPost("/{id:guid}/images", async (Guid id, AddProductImageRequest req, ISender mediator, CancellationToken ct) =>
         {
-            return Results.NoContent();
+            var command = new AddProductImageCommand(id, req.ImageUrl);
+            var result = await mediator.Send(command, ct);
+            return result.ToHttpResult();
         });
 
-        adminProducts.MapDelete("/{id:guid}", async (Guid id, ISender mediator) =>
+        adminProducts.MapPost("/{id:guid}/variants", async (Guid id, CreateVariantRequest req, ISender mediator, CancellationToken ct) =>
         {
-            return Results.NoContent();
+            var command = new AddProductVariantCommand(id, req.Sku, req.PriceAdjustmentAmount, req.InitialStock, req.WeightValue);
+            var result = await mediator.Send(command, ct);
+            return result.ToHttpResult();
         });
 
-        adminProducts.MapPost("/{id:guid}/variants", async (Guid id, CreateVariantRequest req, ISender mediator) =>
+        adminProducts.MapPut("/{id:guid}/variants/{variantId:guid}", async (Guid id, Guid variantId, CreateVariantRequest req, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Created($"/api/v1/products/{id}", req);
-        });
-
-        adminProducts.MapPut("/{id:guid}/variants/{variantId:guid}", async (Guid id, Guid variantId, CreateVariantRequest req, ISender mediator) =>
-        {
-            return Results.Ok(req);
-        });
-
-        adminProducts.MapPost("/{id:guid}/images", async (Guid id, IFormFile image, ISender mediator) =>
-        {
-            return Results.Created($"/api/v1/products/{id}/images", new { url = "https://cdn.vendor.com/img.png" });
-        });
-
-        adminProducts.MapDelete("/{id:guid}/images", async (Guid id, string url, ISender mediator) =>
-        {
-            return Results.NoContent();
+            var command = new UpdateProductVariantCommand(variantId, req.PriceAdjustmentAmount, req.InitialStock, req.WeightValue);
+            var result = await mediator.Send(command, ct);
+            return result.ToHttpResult();
         });
 
         return group;
     }
-
-    private record ProductListResponse(ProductSummaryDto[] Items, int TotalCount, int Page, int PageSize);
 }

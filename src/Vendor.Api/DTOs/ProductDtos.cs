@@ -13,6 +13,7 @@ public record CreateProductRequest(
 
 public record UpdateProductRequest(
     string? Name,
+    string? Slug,
     string? Description,
     decimal? BasePriceAmount,
     string? Currency,
@@ -21,6 +22,7 @@ public record UpdateProductRequest(
 );
 
 public record AdjustStockRequest(Guid VariantId, int Delta, string Reason);
+public record AddProductImageRequest(string ImageUrl);
 
 public record CreateVariantRequest(
     string Sku,

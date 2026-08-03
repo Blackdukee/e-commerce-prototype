@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Vendor.Api.DTOs;
+using Vendor.Api.Extensions;
+using Vendor.Application.Modules.Shipments;
 
 namespace Vendor.Api.Endpoints;
 
@@ -13,7 +15,7 @@ public static class ShipmentEndpoints
         var shipments = group.MapGroup("/shipments")
             .WithTags("Shipments");
 
-        shipments.MapPost("/rates", async (ShippingRatesRequest req, ISender mediator) =>
+        shipments.MapPost("/rates", async (ShippingRatesRequest req, ISender mediator, CancellationToken ct) =>
         {
             return Results.Ok(new ShippingRatesResponseDto(new[]
             {
@@ -22,33 +24,39 @@ public static class ShipmentEndpoints
             }));
         });
 
-        shipments.MapGet("/track/{trackingNumber}", async (string trackingNumber, ISender mediator) =>
+        shipments.MapGet("/track/{trackingNumber}", async (string trackingNumber, string? carrierCode, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(new TrackingResponseDto(trackingNumber, "InTransit", "Distribution Center", DateTime.UtcNow));
+            var result = await mediator.Send(new TrackShipmentQuery(trackingNumber, carrierCode ?? "STANDARD"), ct);
+            return result.ToHttpResult();
+        });
+
+        shipments.MapGet("/{id:guid}", async (Guid id, ISender mediator, CancellationToken ct) =>
+        {
+            var result = await mediator.Send(new GetShipmentByIdQuery(id), ct);
+            return result.ToHttpResult();
         });
 
         var adminShipments = group.MapGroup("/admin/shipments")
             .WithTags("Admin Shipments")
             .RequireAuthorization();
 
-        adminShipments.MapPost("/", async (CreateShipmentRequest req, ISender mediator) =>
+        adminShipments.MapPost("/", async (CreateShipmentRequest req, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Created($"/api/v1/shipments/{Guid.NewGuid()}", new ShipmentDto(Guid.NewGuid(), req.OrderId, null, null, req.CarrierCode, "Created"));
+            var command = new CreateShipmentLabelCommand(req.OrderId, req.CarrierCode, $"TRK-{Guid.NewGuid():N}".Substring(0, 12).ToUpperInvariant());
+            var result = await mediator.Send(command, ct);
+            return result.ToHttpResult();
         });
 
-        adminShipments.MapPost("/{id:guid}/label", async (Guid id, ISender mediator) =>
+        adminShipments.MapPost("/{id:guid}/ship", async (Guid id, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(new ShipmentDto(id, Guid.NewGuid(), "1Z9999999999", "https://labels.shippo.com/123.pdf", "UPS", "LabelCreated"));
+            var result = await mediator.Send(new MarkShipmentInTransitCommand(id), ct);
+            return result.ToHttpResult();
         });
 
-        adminShipments.MapPost("/{id:guid}/ship", async (Guid id, ISender mediator) =>
+        adminShipments.MapPost("/{id:guid}/deliver", async (Guid id, ISender mediator, CancellationToken ct) =>
         {
-            return Results.NoContent();
-        });
-
-        adminShipments.MapPost("/{id:guid}/deliver", async (Guid id, ISender mediator) =>
-        {
-            return Results.NoContent();
+            var result = await mediator.Send(new MarkShipmentDeliveredCommand(id), ct);
+            return result.ToHttpResult();
         });
 
         return group;

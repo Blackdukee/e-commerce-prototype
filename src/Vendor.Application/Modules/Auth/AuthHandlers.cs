@@ -3,6 +3,7 @@ using Vendor.Application.Common.Messaging;
 using Vendor.Application.Common.Results;
 using Vendor.Application.Interfaces;
 using Vendor.Domain.Aggregates.Customer;
+using Vendor.Domain.Interfaces.Adapters;
 using Vendor.Domain.Interfaces.Repositories;
 
 namespace Vendor.Application.Modules.Auth;
@@ -27,49 +28,60 @@ public record GetCurrentUserProfileQuery : IQuery<Result<CustomerDto>>;
 public record ValidateTokenQuery(string Token) : IQuery<Result<bool>>;
 
 public class RegisterCustomerCommandHandler(
+    IIdentityAuthService identityAuthService,
     ICustomerRepository customerRepository,
     ITokenService tokenService)
     : IRequestHandler<RegisterCustomerCommand, Result<AuthResponseDto>>
 {
     public async Task<Result<AuthResponseDto>> Handle(RegisterCustomerCommand request, CancellationToken ct)
     {
-        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-        if (await customerRepository.EmailExistsAsync(normalizedEmail, ct))
+        var result = await identityAuthService.RegisterAsync(request.Email, request.Password, request.FirstName, request.LastName, ct);
+        if (!result.Success)
         {
-            return Error.Conflict("Email.AlreadyRegistered", $"Email '{request.Email}' is already registered.");
+            if (result.ErrorCode == "Email.AlreadyRegistered")
+            {
+                return Error.Conflict("Email.AlreadyRegistered", result.ErrorMessage ?? $"Email '{request.Email}' is already registered.");
+            }
+            return Error.Failure(result.ErrorCode ?? "Auth.RegistrationFailed", result.ErrorMessage ?? "Registration failed.");
         }
 
-        var customer = new Customer(CustomerId.New(), normalizedEmail, request.FirstName, request.LastName, CustomerType.Registered);
-        await customerRepository.AddAsync(customer, ct);
-
-        var tokenResult = tokenService.GenerateTokens(customer.Id.Value, customer.Email, [customer.Role.ToString()]);
-        var customerDto = new CustomerDto(customer.Id.Value, customer.Email, customer.FirstName, customer.LastName, customer.CustomerType.ToString(), customer.AnalyticsConsent);
+        var customer = await customerRepository.GetByIdAsync(new CustomerId(result.CustomerId), ct);
+        var tokenResult = tokenService.GenerateTokens(result.CustomerId, request.Email, [customer?.Role.ToString() ?? "Customer"]);
+        var customerDto = new CustomerDto(result.CustomerId, request.Email, request.FirstName, request.LastName, "Registered", true);
 
         return new AuthResponseDto(tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.AccessTokenExpiresAtUtc, customerDto);
     }
 }
 
 public class LoginWithPasswordCommandHandler(
+    IIdentityAuthService identityAuthService,
     ICustomerRepository customerRepository,
     ITokenService tokenService)
     : IRequestHandler<LoginWithPasswordCommand, Result<AuthResponseDto>>
 {
     public async Task<Result<AuthResponseDto>> Handle(LoginWithPasswordCommand request, CancellationToken ct)
     {
-        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-        var customer = await customerRepository.GetByEmailAsync(normalizedEmail, ct);
-        if (customer == null)
+        var result = await identityAuthService.PasswordSignInAsync(request.Email, request.Password, ct);
+        if (result.IsLockedOut)
         {
-            return Error.Unauthorized("Invalid email or password.");
+            return Error.Failure("Auth.LockedOut", "Account is locked out due to multiple failed login attempts.");
         }
 
-        if (customer.Status == CustomerStatus.Suspended)
+        if (!result.Success)
         {
-            return Error.Forbidden("ACCOUNT_SUSPENDED", "Customer account is suspended.");
+            if (result.ErrorCode == "ACCOUNT_SUSPENDED")
+            {
+                return Error.Forbidden("ACCOUNT_SUSPENDED", result.ErrorMessage ?? "Customer account is suspended.");
+            }
+            return Error.Unauthorized(result.ErrorMessage ?? "Invalid email or password.");
         }
 
-        var tokenResult = tokenService.GenerateTokens(customer.Id.Value, customer.Email, [customer.Role.ToString()]);
-        var customerDto = new CustomerDto(customer.Id.Value, customer.Email, customer.FirstName, customer.LastName, customer.CustomerType.ToString(), customer.AnalyticsConsent);
+        var customer = await customerRepository.GetByIdAsync(new CustomerId(result.CustomerId), ct);
+        var firstName = customer?.FirstName ?? string.Empty;
+        var lastName = customer?.LastName ?? string.Empty;
+
+        var tokenResult = tokenService.GenerateTokens(result.CustomerId, request.Email, [customer?.Role.ToString() ?? "Customer"]);
+        var customerDto = new CustomerDto(result.CustomerId, request.Email, firstName, lastName, "Registered", true);
 
         return new AuthResponseDto(tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.AccessTokenExpiresAtUtc, customerDto);
     }
@@ -97,6 +109,7 @@ public class CreateGuestSessionCommandHandler(
 
 public class LoginWithOAuthCommandHandler(
     IExternalAuthService externalAuthService,
+    IIdentityAuthService identityAuthService,
     ICustomerRepository customerRepository,
     ITokenService tokenService)
     : IRequestHandler<LoginWithOAuthCommand, Result<AuthResponseDto>>
@@ -115,29 +128,40 @@ public class LoginWithOAuthCommandHandler(
             return Error.Unauthorized($"Invalid or unverified {request.Provider} token.");
         }
 
-        var normalizedEmail = externalUser.Email.Trim().ToLowerInvariant();
-        var customer = await customerRepository.GetByEmailAsync(normalizedEmail, ct);
-        if (customer == null)
+        var result = await identityAuthService.ExternalSignInOrRegisterAsync(
+            request.Provider,
+            externalUser.ProviderId,
+            externalUser.Email,
+            isEmailVerified: true,
+            externalUser.FirstName,
+            externalUser.LastName,
+            ct);
+
+        if (!result.Success)
         {
-            customer = new Customer(CustomerId.New(), normalizedEmail, externalUser.FirstName, externalUser.LastName, CustomerType.Registered);
-            await customerRepository.AddAsync(customer, ct);
+            if (result.ErrorCode == "Auth.UnverifiedEmailConflict")
+            {
+                return Error.Conflict("Auth.UnverifiedEmailConflict", result.ErrorMessage ?? "Email is not verified by provider. Please sign in with password first.");
+            }
+
+            if (result.ErrorCode == "ACCOUNT_SUSPENDED")
+            {
+                return Error.Forbidden("ACCOUNT_SUSPENDED", result.ErrorMessage ?? "Customer account is suspended.");
+            }
+
+            return Error.Unauthorized(result.ErrorMessage ?? $"External login via {request.Provider} failed.");
         }
 
-        if (customer.Status == CustomerStatus.Suspended)
-        {
-            return Error.Forbidden("ACCOUNT_SUSPENDED", "Customer account is suspended.");
-        }
-
-        var tokenResult = tokenService.GenerateTokens(customer.Id.Value, customer.Email, [customer.Role.ToString()]);
-        var customerDto = new CustomerDto(customer.Id.Value, customer.Email, customer.FirstName, customer.LastName, customer.CustomerType.ToString(), customer.AnalyticsConsent);
+        var customer = await customerRepository.GetByIdAsync(new CustomerId(result.CustomerId), ct);
+        var tokenResult = tokenService.GenerateTokens(result.CustomerId, externalUser.Email, [customer?.Role.ToString() ?? "Customer"]);
+        var customerDto = new CustomerDto(result.CustomerId, externalUser.Email, externalUser.FirstName, externalUser.LastName, "Registered", true);
 
         return new AuthResponseDto(tokenResult.AccessToken, tokenResult.RefreshToken, tokenResult.AccessTokenExpiresAtUtc, customerDto);
     }
 }
 
 public class RefreshTokenCommandHandler(
-    ITokenService tokenService,
-    ICustomerRepository customerRepository)
+    ITokenService tokenService)
     : IRequestHandler<RefreshTokenCommand, Result<AuthResponseDto>>
 {
     public async Task<Result<AuthResponseDto>> Handle(RefreshTokenCommand request, CancellationToken ct)
@@ -166,28 +190,42 @@ public class RevokeTokenCommandHandler(ITokenService tokenService)
     }
 }
 
-public class ForgotPasswordCommandHandler(ICustomerRepository customerRepository)
+public class ForgotPasswordCommandHandler(IIdentityAuthService identityAuthService, INotificationSender notificationSender)
     : IRequestHandler<ForgotPasswordCommand, Result>
 {
     public async Task<Result> Handle(ForgotPasswordCommand request, CancellationToken ct)
     {
-        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-        _ = await customerRepository.GetByEmailAsync(normalizedEmail, ct);
+        var token = await identityAuthService.GeneratePasswordResetTokenAsync(request.Email, ct);
+        if (!string.IsNullOrEmpty(token))
+        {
+            try
+            {
+                await notificationSender.SendPasswordResetAsync(request.Email, token, ct);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ForgotPassword] Exception sending reset email: {ex.Message}");
+            }
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine($"[ForgotPassword] User '{request.Email}' not found in database. Register first via POST /api/v1/auth/register.");
+        }
+
         // Always succeed to prevent user enumeration
         return Result.Success();
     }
 }
 
-public class ResetPasswordCommandHandler(ICustomerRepository customerRepository)
+public class ResetPasswordCommandHandler(IIdentityAuthService identityAuthService)
     : IRequestHandler<ResetPasswordCommand, Result>
 {
     public async Task<Result> Handle(ResetPasswordCommand request, CancellationToken ct)
     {
-        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-        var customer = await customerRepository.GetByEmailAsync(normalizedEmail, ct);
-        if (customer == null)
+        var success = await identityAuthService.ResetPasswordAsync(request.Email, request.Token, request.NewPassword, ct);
+        if (!success)
         {
-            return Error.NotFound("Customer.NotFound", "Customer not found.");
+            return Error.Failure("Auth.ResetPasswordFailed", "Failed to reset password. Invalid or expired token.");
         }
 
         return Result.Success();

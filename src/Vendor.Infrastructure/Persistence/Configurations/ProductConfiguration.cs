@@ -24,6 +24,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.PrimitiveCollection(p => p.Images);
         builder.HasIndex(p => p.Slug).IsUnique();
 
+        builder.Navigation(p => p.Variants).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.OwnsMany(p => p.Variants, v =>
         {
             v.WithOwner().HasForeignKey(x => x.ProductId);

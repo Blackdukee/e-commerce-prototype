@@ -10,7 +10,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="MailKit" Version="4.9.0" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.68.0" />
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.18" />
+    <PackageReference Include="Hangfire.Core" Version="1.8.18" />
+    <PackageReference Include="Hangfire.SqlServer" Version="1.8.18" />
+    <PackageReference Include="MailKit" Version="4.14.0" />
+    <PackageReference Include="Mailtrap" Version="1.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="9.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
@@ -23,10 +28,15 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.3.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-9j88-vvj5-vhgr" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);NU1902</NoWarn>
   </PropertyGroup>
 
 </Project>

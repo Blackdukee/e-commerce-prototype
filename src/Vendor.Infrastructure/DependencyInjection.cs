@@ -1,3 +1,5 @@
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
@@ -13,6 +15,7 @@ using Vendor.Domain.ValueObjects;
 using Vendor.Infrastructure.Auth;
 using Vendor.Infrastructure.Caching;
 using Vendor.Infrastructure.Common;
+using Vendor.Infrastructure.Email;
 using Vendor.Infrastructure.Identity;
 using Vendor.Infrastructure.Outbox;
 using Vendor.Infrastructure.Payments;
@@ -44,11 +47,12 @@ public static class DependencyInjection
         // Bind ICacheService to the Redis implementation
         services.AddScoped<ICacheService, RedisCacheService>();
 
+        var connectionString = configuration.GetConnectionString("DefaultConnection")
+            ?? "Server=(localdb)\\mssqllocaldb;Database=VendorDb;Trusted_Connection=True;";
+
         services.AddDbContext<VendorDbContext>((sp, options) =>
         {
             var interceptor = sp.GetRequiredService<OutboxInterceptor>();
-            var connectionString = configuration.GetConnectionString("DefaultConnection")
-                ?? "Server=(localdb)\\mssqllocaldb;Database=VendorDb;Trusted_Connection=True;";
 
             options.UseSqlServer(connectionString, sql =>
             {
@@ -59,7 +63,29 @@ public static class DependencyInjection
             });
 
             options.AddInterceptors(interceptor);
+            options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
+
+        services.AddHangfire(config => config
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+            {
+                CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                QueuePollInterval = TimeSpan.Zero,
+                UseRecommendedIsolationLevel = true,
+                DisableGlobalLocks = true
+            }));
+
+        services.AddHangfireServer(options =>
+        {
+            options.WorkerCount = Environment.ProcessorCount * 2;
+        });
+
+        services.AddScoped<OutboxProcessorJob>();
+        services.AddScoped<OutboxCleanupJob>();
 
         services.AddIdentityCore<ApplicationUser>(options =>
         {
@@ -69,11 +95,13 @@ public static class DependencyInjection
             options.Password.RequireUppercase = true;
             options.Password.RequireLowercase = false;
             options.Password.RequireNonAlphanumeric = false;
+            options.Lockout.AllowedForNewUsers = true;
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             options.Lockout.MaxFailedAccessAttempts = 5;
         })
         .AddRoles<ApplicationRole>()
         .AddEntityFrameworkStores<VendorDbContext>()
+        .AddSignInManager()
         .AddDefaultTokenProviders();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<VendorDbContext>());
@@ -108,10 +136,46 @@ public static class DependencyInjection
         var jwtSecret = configuration["Jwt:SecretKey"]
             ?? throw new InvalidOperationException(
                 "Jwt:SecretKey configuration is required. Set it via environment variable or appsettings.");
+        services.AddScoped<IIdentityAuthService, IdentityAuthService>();
         services.AddScoped<ITokenService>(sp =>
             new JwtTokenService(sp.GetRequiredService<VendorDbContext>(), jwtSecret));
         services.AddScoped<IExternalAuthService, ExternalAuthService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        services.AddScoped<INotificationSender>(sp =>
+        {
+            var config = sp.GetRequiredService<VendorConfig>();
+            var emailConfig = config.Boot.Email;
+
+            static string ResolveSecret(string? rawRef)
+            {
+                if (string.IsNullOrWhiteSpace(rawRef)) return "";
+                if (rawRef.StartsWith("ref:env:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var varName = rawRef["ref:env:".Length..];
+                    return Environment.GetEnvironmentVariable(varName) ?? rawRef;
+                }
+                return rawRef;
+            }
+
+            if (emailConfig.Provider == EmailProvider.Smtp)
+            {
+                var smtpPassword = ResolveSecret(emailConfig.SmtpPassword?.RawReference);
+                return new SmtpEmailSender(
+                    emailConfig.SmtpHost ?? "localhost",
+                    emailConfig.SmtpPort ?? 25,
+                    emailConfig.SmtpUsername ?? "",
+                    smtpPassword,
+                    emailConfig.SenderAddress,
+                    emailConfig.SenderName);
+            }
+
+            var apiToken = ResolveSecret(emailConfig.MailtrapApiKey?.RawReference);
+            return new MailtrapEmailSender(
+                apiToken,
+                emailConfig.SenderAddress,
+                emailConfig.SenderName);
+        });
 
         // Default VendorConfig singleton for boot
         services.AddSingleton(CreateDefaultVendorConfig());

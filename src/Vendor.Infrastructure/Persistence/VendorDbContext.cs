@@ -56,7 +56,7 @@ public class VendorDbContext(DbContextOptions<VendorDbContext> options) : Identi
 
     public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation, CancellationToken ct = default)
     {
-        if (Database.CurrentTransaction != null)
+        if (Database.CurrentTransaction != null || Database.ProviderName?.EndsWith("InMemory") == true)
         {
             return await operation();
         }

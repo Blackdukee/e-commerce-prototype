@@ -16,30 +16,59 @@ namespace Vendor.Infrastructure.Persistence.Repositories;
 public class ProductRepository(VendorDbContext context) : IProductRepository
 {
     public async Task<Product?> GetByIdAsync(ProductId id, CancellationToken ct = default)
-        => await context.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
+        => await context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Id == id, ct);
 
     public async Task<Product?> GetBySlugAsync(Slug slug, CancellationToken ct = default)
-        => await context.Products.FirstOrDefaultAsync(p => p.Slug.Value == slug.Value, ct);
+        => await context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Slug.Value == slug.Value, ct);
+
+    public async Task<Product?> GetByVariantIdAsync(ProductVariantId variantId, CancellationToken ct = default)
+        => await context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Variants.Any(v => v.Id == variantId), ct);
+
+    public async Task<IReadOnlyList<Product>> SearchAsync(string? searchTerm, int pageIndex, int pageSize, CancellationToken ct = default)
+    {
+        var query = context.Products.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim().ToLowerInvariant();
+            query = query.Where(p => p.Name.ToLower().Contains(term) || p.Slug.Value.ToLower().Contains(term));
+        }
+        return await query.Skip(pageIndex * pageSize).Take(pageSize).ToListAsync(ct);
+    }
 
     public async Task<IReadOnlyList<ProductVariant>> GetVariantsByIdsAsync(IEnumerable<ProductVariantId> variantIds, CancellationToken ct = default)
     {
         var ids = variantIds.Select(v => v.Value).ToList();
-        var products = await context.Products.ToListAsync(ct);
-        return products.SelectMany(p => p.Variants).Where(v => ids.Contains(v.Id.Value)).ToList();
+        return await context.Products
+            .AsNoTracking()
+            .SelectMany(p => p.Variants)
+            .Where(v => ids.Contains(v.Id.Value))
+            .ToListAsync(ct);
     }
 
     public async Task<ProductVariant?> GetVariantByIdAsync(ProductVariantId variantId, CancellationToken ct = default)
     {
-        var products = await context.Products.ToListAsync(ct);
-        return products.SelectMany(p => p.Variants).FirstOrDefault(v => v.Id == variantId);
+        return await context.Products
+            .AsNoTracking()
+            .SelectMany(p => p.Variants)
+            .FirstOrDefaultAsync(v => v.Id == variantId, ct);
     }
 
     public async Task AddAsync(Product product, CancellationToken ct = default)
         => await context.Products.AddAsync(product, ct);
 
+    public Task AddVariantAsync(Product product, ProductVariant variant, CancellationToken ct = default)
+    {
+        context.Entry(variant).State = EntityState.Added;
+        return Task.CompletedTask;
+    }
+
     public Task UpdateAsync(Product product, CancellationToken ct = default)
     {
-        context.Products.Update(product);
+        var entry = context.Entry(product);
+        if (entry.State != EntityState.Added)
+        {
+            context.Products.Update(product);
+        }
         return Task.CompletedTask;
     }
 
@@ -47,92 +76,34 @@ public class ProductRepository(VendorDbContext context) : IProductRepository
         => await context.Products.AnyAsync(p => p.Id == id, ct);
 }
 
-public class CustomerRepository(
-    VendorDbContext context,
-    Microsoft.AspNetCore.Identity.UserManager<Vendor.Infrastructure.Identity.ApplicationUser>? userManager = null) : ICustomerRepository
+public class CustomerRepository(VendorDbContext context) : ICustomerRepository
 {
     public async Task<Customer?> GetByIdAsync(CustomerId id, CancellationToken ct = default)
     {
-        if (userManager != null)
-        {
-            var appUser = await userManager.FindByIdAsync(id.Value.ToString());
-            if (appUser != null) return appUser.ToDomainEntity();
-        }
-
         return await context.Customers.FirstOrDefaultAsync(c => c.Id == id, ct);
     }
 
     public async Task<Customer?> GetByEmailAsync(string email, CancellationToken ct = default)
     {
         var normalizedEmail = email.Trim().ToLowerInvariant();
-        if (userManager != null)
-        {
-            var appUser = await userManager.FindByEmailAsync(normalizedEmail);
-            if (appUser != null) return appUser.ToDomainEntity();
-        }
-
         return await context.Customers.FirstOrDefaultAsync(c => c.Email == normalizedEmail, ct);
     }
 
     public async Task<bool> EmailExistsAsync(string email, CancellationToken ct = default)
     {
         var normalizedEmail = email.Trim().ToLowerInvariant();
-        if (userManager != null)
-        {
-            var appUser = await userManager.FindByEmailAsync(normalizedEmail);
-            if (appUser != null) return true;
-        }
-
         return await context.Customers.AnyAsync(c => c.Email == normalizedEmail, ct);
     }
 
     public async Task AddAsync(Customer customer, CancellationToken ct = default)
     {
-        if (userManager != null)
-        {
-            var appUser = new Vendor.Infrastructure.Identity.ApplicationUser
-            {
-                Id = customer.Id.Value,
-                UserName = customer.Email,
-                Email = customer.Email,
-                EmailConfirmed = true,
-                FirstName = customer.FirstName,
-                LastName = customer.LastName,
-                CustomerType = customer.CustomerType,
-                Role = customer.Role,
-                Status = customer.Status,
-                AnalyticsConsent = customer.AnalyticsConsent,
-                CreatedAtUtc = customer.CreatedAtUtc,
-                RegisteredAtUtc = customer.RegisteredAtUtc
-            };
-
-            var result = await userManager.CreateAsync(appUser);
-            if (result.Succeeded) return;
-        }
-
         await context.Customers.AddAsync(customer, ct);
     }
 
-    public async Task UpdateAsync(Customer customer, CancellationToken ct = default)
+    public Task UpdateAsync(Customer customer, CancellationToken ct = default)
     {
-        if (userManager != null)
-        {
-            var appUser = await userManager.FindByIdAsync(customer.Id.Value.ToString());
-            if (appUser != null)
-            {
-                appUser.FirstName = customer.FirstName;
-                appUser.LastName = customer.LastName;
-                appUser.CustomerType = customer.CustomerType;
-                appUser.Role = customer.Role;
-                appUser.Status = customer.Status;
-                appUser.AnalyticsConsent = customer.AnalyticsConsent;
-
-                await userManager.UpdateAsync(appUser);
-                return;
-            }
-        }
-
         context.Customers.Update(customer);
+        return Task.CompletedTask;
     }
 
     public async Task<(IReadOnlyList<Customer> Items, int TotalCount)> GetPagedAsync(
@@ -209,46 +180,53 @@ public class CustomerRepository(
 public class CartRepository(VendorDbContext context) : ICartRepository
 {
     public async Task<Cart?> GetByIdAsync(CartId id, CancellationToken ct = default)
-        => await context.Carts.FirstOrDefaultAsync(c => c.Id == id, ct);
+        => await context.Carts.Include(c => c.Items).FirstOrDefaultAsync(c => c.Id == id, ct);
 
     public async Task<Cart?> GetByCustomerIdAsync(CustomerId customerId, CancellationToken ct = default)
-        => await context.Carts.FirstOrDefaultAsync(c => c.CustomerId == customerId, ct);
+        => await context.Carts.Include(c => c.Items).FirstOrDefaultAsync(c => c.CustomerId == customerId, ct);
 
     public async Task<Cart?> GetBySessionIdAsync(string sessionId, CancellationToken ct = default)
-        => await context.Carts.FirstOrDefaultAsync(c => c.SessionId == sessionId, ct);
+        => await context.Carts.Include(c => c.Items).FirstOrDefaultAsync(c => c.SessionId == sessionId, ct);
 
     public async Task AddAsync(Cart cart, CancellationToken ct = default)
         => await context.Carts.AddAsync(cart, ct);
 
     public Task UpdateAsync(Cart cart, CancellationToken ct = default)
     {
-        context.Carts.Update(cart);
+        var entry = context.Entry(cart);
+        if (entry.State != EntityState.Added)
+        {
+            context.Carts.Update(cart);
+        }
         return Task.CompletedTask;
     }
 
     public async Task<IReadOnlyList<Cart>> GetAbandonedCartsAsync(DateTime abandonedBefore, CancellationToken ct = default)
-        => await context.Carts.Where(c => c.LastModifiedUtc <= abandonedBefore && c.Status == CartStatus.Active).ToListAsync(ct);
+        => await context.Carts.Include(c => c.Items).Where(c => c.LastModifiedUtc <= abandonedBefore && c.Status == CartStatus.Active).ToListAsync(ct);
 }
 
 public class OrderRepository(VendorDbContext context) : IOrderRepository
 {
     public async Task<Order?> GetByIdAsync(OrderId id, CancellationToken ct = default)
-        => await context.Orders.FirstOrDefaultAsync(o => o.Id == id, ct);
+        => await context.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == id, ct);
 
     public async Task<Order?> GetByOrderNumberAsync(string number, CancellationToken ct = default)
-        => await context.Orders.FirstOrDefaultAsync(o => o.OrderNumber == number, ct);
+        => await context.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.OrderNumber == number, ct);
 
     public async Task AddAsync(Order order, CancellationToken ct = default)
         => await context.Orders.AddAsync(order, ct);
 
     public Task UpdateAsync(Order order, CancellationToken ct = default)
     {
-        context.Orders.Update(order);
+        if (context.Entry(order).State == EntityState.Detached)
+        {
+            context.Orders.Update(order);
+        }
         return Task.CompletedTask;
     }
 
     public async Task<IReadOnlyList<Order>> GetByCustomerIdAsync(CustomerId customerId, CancellationToken ct = default)
-        => await context.Orders.Where(o => o.CustomerId == customerId).ToListAsync(ct);
+        => await context.Orders.Include(o => o.Lines).Where(o => o.CustomerId == customerId).ToListAsync(ct);
 }
 
 public class PaymentRepository(VendorDbContext context) : IPaymentRepository

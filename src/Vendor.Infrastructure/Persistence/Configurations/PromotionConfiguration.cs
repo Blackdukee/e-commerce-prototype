@@ -16,6 +16,8 @@ public class PromotionConfiguration : IEntityTypeConfiguration<Promotion>
         builder.Property(x => x.Code).IsRequired().HasMaxLength(64);
         builder.HasIndex(x => x.Code).IsUnique();
 
+        builder.Property(x => x.DiscountValue).HasPrecision(18, 4);
+
         builder.Property(x => x.MaxDiscountAmount).HasConversion<NullableMoneyConverter>();
         builder.Property(x => x.MinOrderAmount).HasConversion<NullableMoneyConverter>();
 

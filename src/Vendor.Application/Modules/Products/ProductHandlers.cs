@@ -1,6 +1,7 @@
 using MediatR;
 using Vendor.Application.Common.Messaging;
 using Vendor.Application.Common.Results;
+using Vendor.Application.Interfaces;
 using Vendor.Domain.Aggregates.Product;
 using Vendor.Domain.Interfaces.Repositories;
 using Vendor.Domain.ValueObjects;
@@ -36,25 +37,30 @@ public record CreateProductCommand(string Name, string Slug, decimal BasePrice, 
 public record UpdateProductCommand(Guid ProductId, string Name, string Slug, decimal BasePrice, string? Description = null) : ICommand<Result<ProductDto>>;
 public record ActivateProductCommand(Guid ProductId) : ICommand<Result>, IIdempotentRequest<Result>
 {
-    public string IdempotencyKey => $"ACTIVATE-{ProductId}";
+    public string IdempotencyKey => ToGuidString($"ACTIVATE-{ProductId}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 public record DeactivateProductCommand(Guid ProductId, string? Reason = null) : ICommand<Result>, IIdempotentRequest<Result>
 {
-    public string IdempotencyKey => $"DEACTIVATE-{ProductId}";
+    public string IdempotencyKey => ToGuidString($"DEACTIVATE-{ProductId}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 public record AddProductVariantCommand(Guid ProductId, string Sku, decimal PriceAdjustment, int StockQuantity, decimal WeightKg) : ICommand<Result<ProductVariantDto>>;
 public record UpdateProductVariantCommand(Guid VariantId, decimal PriceAdjustment, int StockQuantity, decimal WeightKg) : ICommand<Result<ProductVariantDto>>;
 public record DeleteProductVariantCommand(Guid ProductId, Guid VariantId) : ICommand<Result>, IIdempotentRequest<Result>
 {
-    public string IdempotencyKey => $"DEL-VAR-{VariantId}";
+    public string IdempotencyKey => ToGuidString($"DEL-VAR-{VariantId}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 public record AddProductImageCommand(Guid ProductId, string ImageUrl) : ICommand<Result>, IIdempotentRequest<Result>
 {
-    public string IdempotencyKey => $"ADD-IMG-{ProductId}-{ImageUrl.GetHashCode()}";
+    public string IdempotencyKey => ToGuidString($"ADD-IMG-{ProductId}-{ImageUrl}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 public record RemoveProductImageCommand(Guid ProductId, string ImageUrl) : ICommand<Result>, IIdempotentRequest<Result>
 {
-    public string IdempotencyKey => $"REM-IMG-{ProductId}-{ImageUrl.GetHashCode()}";
+    public string IdempotencyKey => ToGuidString($"REM-IMG-{ProductId}-{ImageUrl}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 
 public record GetProductByIdQuery(Guid ProductId) : IQuery<Result<ProductDto>>;
@@ -62,7 +68,7 @@ public record GetProductBySlugQuery(string Slug) : IQuery<Result<ProductDto>>;
 public record SearchProductsQuery(string? SearchTerm, int PageIndex = 0, int PageSize = 20) : IQuery<Result<IReadOnlyList<ProductDto>>>;
 public record GetProductVariantsQuery(Guid ProductId) : IQuery<Result<IReadOnlyList<ProductVariantDto>>>;
 
-public class CreateProductCommandHandler(IProductRepository productRepository) : IRequestHandler<CreateProductCommand, Result<ProductDto>>
+public class CreateProductCommandHandler(IProductRepository productRepository, IUnitOfWork unitOfWork) : IRequestHandler<CreateProductCommand, Result<ProductDto>>
 {
     public async Task<Result<ProductDto>> Handle(CreateProductCommand request, CancellationToken ct)
     {
@@ -74,6 +80,7 @@ public class CreateProductCommandHandler(IProductRepository productRepository) :
 
         var product = new Product(ProductId.New(), request.Name, slug, new Money(request.BasePrice, request.Currency), request.Description, request.LowStockThreshold);
         await productRepository.AddAsync(product, ct);
+        await unitOfWork.SaveChangesAsync(ct);
 
         return ProductDto.FromDomain(product);
     }
@@ -86,5 +93,124 @@ public class GetProductByIdQueryHandler(IProductRepository productRepository) : 
         var product = await productRepository.GetByIdAsync(new ProductId(request.ProductId), ct);
         if (product == null) return Error.NotFound("Product", request.ProductId);
         return ProductDto.FromDomain(product);
+    }
+}
+
+public class GetProductBySlugQueryHandler(IProductRepository productRepository) : IRequestHandler<GetProductBySlugQuery, Result<ProductDto>>
+{
+    public async Task<Result<ProductDto>> Handle(GetProductBySlugQuery request, CancellationToken ct)
+    {
+        var product = await productRepository.GetBySlugAsync(new Slug(request.Slug), ct);
+        if (product == null) return Error.NotFound("Product", request.Slug);
+        return ProductDto.FromDomain(product);
+    }
+}
+
+public class SearchProductsQueryHandler(IProductRepository productRepository) : IRequestHandler<SearchProductsQuery, Result<IReadOnlyList<ProductDto>>>
+{
+    public async Task<Result<IReadOnlyList<ProductDto>>> Handle(SearchProductsQuery request, CancellationToken ct)
+    {
+        var products = await productRepository.SearchAsync(request.SearchTerm, request.PageIndex, request.PageSize, ct);
+        var dtos = products.Select(ProductDto.FromDomain).ToList();
+        return dtos;
+    }
+}
+
+public class UpdateProductCommandHandler(IProductRepository productRepository, IUnitOfWork unitOfWork) : IRequestHandler<UpdateProductCommand, Result<ProductDto>>
+{
+    public async Task<Result<ProductDto>> Handle(UpdateProductCommand request, CancellationToken ct)
+    {
+        var product = await productRepository.GetByIdAsync(new ProductId(request.ProductId), ct);
+        if (product == null) return Error.NotFound("Product", request.ProductId);
+
+        var slug = string.IsNullOrWhiteSpace(request.Slug) ? product.Slug : new Slug(request.Slug);
+        var price = request.BasePrice > 0 ? new Money(request.BasePrice, product.BasePrice.Currency) : product.BasePrice;
+        product.UpdateDetails(request.Name, slug, price, request.Description);
+
+        await productRepository.UpdateAsync(product, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+        return ProductDto.FromDomain(product);
+    }
+}
+
+public class ActivateProductCommandHandler(IProductRepository productRepository, IUnitOfWork unitOfWork) : IRequestHandler<ActivateProductCommand, Result>
+{
+    public async Task<Result> Handle(ActivateProductCommand request, CancellationToken ct)
+    {
+        var product = await productRepository.GetByIdAsync(new ProductId(request.ProductId), ct);
+        if (product == null) return Error.NotFound("Product", request.ProductId);
+        product.Activate();
+        await productRepository.UpdateAsync(product, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public class DeactivateProductCommandHandler(IProductRepository productRepository, IUnitOfWork unitOfWork) : IRequestHandler<DeactivateProductCommand, Result>
+{
+    public async Task<Result> Handle(DeactivateProductCommand request, CancellationToken ct)
+    {
+        var product = await productRepository.GetByIdAsync(new ProductId(request.ProductId), ct);
+        if (product == null) return Error.NotFound("Product", request.ProductId);
+        product.Discontinue();
+        await productRepository.UpdateAsync(product, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
+    }
+}
+
+public class AddProductVariantCommandHandler(IProductRepository productRepository, IUnitOfWork unitOfWork) : IRequestHandler<AddProductVariantCommand, Result<ProductVariantDto>>
+{
+    public async Task<Result<ProductVariantDto>> Handle(AddProductVariantCommand request, CancellationToken ct)
+    {
+        var product = await productRepository.GetByIdAsync(new ProductId(request.ProductId), ct);
+        if (product == null) return Error.NotFound("Product", request.ProductId);
+
+        var variant = new ProductVariant(
+            ProductVariantId.New(),
+            product.Id,
+            request.Sku,
+            new Money(request.PriceAdjustment, product.BasePrice.Currency),
+            request.StockQuantity,
+            new Weight(request.WeightKg, WeightUnit.Kg),
+            new Dimensions(10, 10, 10, DimensionUnit.Cm));
+
+        product.AddVariant(variant);
+        await productRepository.AddVariantAsync(product, variant, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return new ProductVariantDto(variant.Id.Value, variant.Sku, variant.PriceAdjustment.Amount, variant.StockQuantity, variant.Weight.Value, variant.Weight.Unit.ToString());
+    }
+}
+
+public class UpdateProductVariantCommandHandler(IProductRepository productRepository, IUnitOfWork unitOfWork) : IRequestHandler<UpdateProductVariantCommand, Result<ProductVariantDto>>
+{
+    public async Task<Result<ProductVariantDto>> Handle(UpdateProductVariantCommand request, CancellationToken ct)
+    {
+        var product = await productRepository.GetByVariantIdAsync(new ProductVariantId(request.VariantId), ct);
+        if (product == null) return Error.NotFound("ProductVariant", request.VariantId);
+
+        var variant = product.Variants.FirstOrDefault(v => v.Id.Value == request.VariantId);
+        if (variant == null) return Error.NotFound("ProductVariant", request.VariantId);
+
+        variant.UpdateDetails(new Money(request.PriceAdjustment, product.BasePrice.Currency), request.StockQuantity, new Weight(request.WeightKg, WeightUnit.Kg));
+        await productRepository.UpdateAsync(product, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+
+        return new ProductVariantDto(variant.Id.Value, variant.Sku, variant.PriceAdjustment.Amount, variant.StockQuantity, variant.Weight.Value, variant.Weight.Unit.ToString());
+    }
+}
+
+public class AddProductImageCommandHandler(IProductRepository productRepository, IUnitOfWork unitOfWork) : IRequestHandler<AddProductImageCommand, Result>
+{
+    public async Task<Result> Handle(AddProductImageCommand request, CancellationToken ct)
+    {
+        var product = await productRepository.GetByIdAsync(new ProductId(request.ProductId), ct);
+        if (product == null) return Error.NotFound("Product", request.ProductId);
+
+        product.AddImage(request.ImageUrl);
+        await productRepository.UpdateAsync(product, ct);
+        await unitOfWork.SaveChangesAsync(ct);
+        return Result.Success();
     }
 }

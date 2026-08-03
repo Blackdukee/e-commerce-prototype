@@ -19,19 +19,22 @@ public class ModuleHandlersTests
     {
         var repo = Substitute.For<ICustomerRepository>();
         var tokenService = Substitute.For<ITokenService>();
+        var identityAuth = Substitute.For<IIdentityAuthService>();
 
-        repo.EmailExistsAsync("test@example.com", Arg.Any<CancellationToken>()).Returns(false);
-        tokenService.GenerateTokens(Arg.Any<Guid>(), "test@example.com", Arg.Any<IEnumerable<string>>())
+        var customerId = Guid.NewGuid();
+        identityAuth.RegisterAsync("test@example.com", "Secret123!", "John", "Doe", Arg.Any<CancellationToken>())
+            .Returns(new IdentityRegisterResult(true, Guid.NewGuid(), customerId, null, null));
+
+        tokenService.GenerateTokens(customerId, "test@example.com", Arg.Any<IEnumerable<string>>())
             .Returns(new TokenResult("ACCESS", "REFRESH", DateTime.UtcNow.AddHours(1)));
 
-        var handler = new RegisterCustomerCommandHandler(repo, tokenService);
+        var handler = new RegisterCustomerCommandHandler(identityAuth, repo, tokenService);
         var command = new RegisterCustomerCommand("test@example.com", "Secret123!", "John", "Doe");
 
         var result = await handler.Handle(command, CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.AccessToken.Should().Be("ACCESS");
-        await repo.Received(1).AddAsync(Arg.Any<Customer>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -40,7 +43,8 @@ public class ModuleHandlersTests
         var repo = Substitute.For<IProductRepository>();
         repo.GetBySlugAsync(Arg.Any<Slug>(), Arg.Any<CancellationToken>()).Returns((Product?)null);
 
-        var handler = new CreateProductCommandHandler(repo);
+        var unitOfWork = Substitute.For<IUnitOfWork>();
+        var handler = new CreateProductCommandHandler(repo, unitOfWork);
         var command = new CreateProductCommand("Widget", "widget", 19.99m, "USD");
 
         var result = await handler.Handle(command, CancellationToken.None);

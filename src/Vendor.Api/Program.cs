@@ -1,8 +1,11 @@
 using Asp.Versioning;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Vendor.Api.Extensions;
 using Vendor.Api.Middleware;
+using Vendor.Api.Security;
+using Vendor.Infrastructure.Outbox;
 using Vendor.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,7 +29,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<VendorDbContext>();
-    if (dbContext.Database.IsRelational())
+    if (dbContext.Database.IsRelational() && !app.Environment.IsEnvironment("Testing"))
     {
         dbContext.Database.Migrate();
     }
@@ -60,6 +63,24 @@ app.UseMiddleware<MaintenanceModeMiddleware>();
 // Stage 9: Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new HangfireDashboardAuthorizationFilter() }
+});
+
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    RecurringJob.AddOrUpdate<OutboxProcessorJob>(
+        "outbox-processor",
+        job => job.ProcessOutboxMessagesAsync(CancellationToken.None),
+        "*/5 * * * * *");
+
+    RecurringJob.AddOrUpdate<OutboxCleanupJob>(
+        "outbox-cleanup",
+        job => job.PurgeOldProcessedMessagesAsync(CancellationToken.None),
+        Cron.Daily(2));
+}
 
 // Swagger UI in Development / Local
 if (app.Environment.IsDevelopment())

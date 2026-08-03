@@ -23,4 +23,9 @@ public interface INotificationSender
         CustomerId customerId,
         ReturnRequestId returnRequestId,
         CancellationToken ct = default);
+
+    Task SendPasswordResetAsync(
+        string email,
+        string token,
+        CancellationToken ct = default);
 }

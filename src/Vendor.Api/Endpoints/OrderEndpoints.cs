@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Vendor.Api.DTOs;
+using Vendor.Api.Extensions;
+using Vendor.Application.Interfaces;
+using Vendor.Application.Modules.Orders;
 
 namespace Vendor.Api.Endpoints;
 
@@ -14,63 +17,57 @@ public static class OrderEndpoints
             .WithTags("Orders")
             .RequireAuthorization();
 
-        orders.MapGet("/my-orders", async (int? page, int? pageSize, ISender mediator) =>
+        orders.MapGet("/my-orders", async (int? page, int? pageSize, ICurrentUserService user, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(new OrderListResponse(Array.Empty<OrderSummaryDto>(), 0, page ?? 1, pageSize ?? 20));
+            var customerId = user.CustomerId ?? Guid.Empty;
+            var pIndex = (page ?? 1) - 1;
+            var pSize = Math.Min(pageSize ?? 20, 100);
+            var result = await mediator.Send(new GetOrdersByCustomerIdQuery(customerId, pIndex <= 0 ? 0 : pIndex, pSize <= 0 ? 20 : pSize), ct);
+            return result.ToHttpResult();
         });
 
-        orders.MapGet("/{id:guid}", async (Guid id, ISender mediator) =>
+        orders.MapGet("/{id:guid}", async (Guid id, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(new OrderDto(
-                id, "ORD-1001", "Placed", Array.Empty<OrderLineDto>(),
-                new AddressDto("123 Main St", "NYC", "NY", "10001", "US"),
-                new MoneyDto(100m, "USD"), new MoneyDto(8m, "USD"), new MoneyDto(5m, "USD"), new MoneyDto(0m, "USD"), new MoneyDto(113m, "USD"),
-                DateTime.UtcNow
-            ));
+            var result = await mediator.Send(new GetOrderByIdQuery(id), ct);
+            return result.ToHttpResult();
         });
 
-        orders.MapGet("/number/{orderNumber}", async (string orderNumber, ISender mediator) =>
+        orders.MapGet("/number/{orderNumber}", async (string orderNumber, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(new OrderDto(
-                Guid.NewGuid(), orderNumber, "Placed", Array.Empty<OrderLineDto>(),
-                new AddressDto("123 Main St", "NYC", "NY", "10001", "US"),
-                new MoneyDto(100m, "USD"), new MoneyDto(8m, "USD"), new MoneyDto(5m, "USD"), new MoneyDto(0m, "USD"), new MoneyDto(113m, "USD"),
-                DateTime.UtcNow
-            ));
+            var result = await mediator.Send(new GetOrderByNumberQuery(orderNumber), ct);
+            return result.ToHttpResult();
         });
 
-        orders.MapPost("/{id:guid}/cancel", async (Guid id, CancelOrderRequest req, ISender mediator) =>
+        orders.MapPost("/{id:guid}/cancel", async (Guid id, CancelOrderRequest req, ISender mediator, CancellationToken ct) =>
         {
-            return Results.NoContent();
+            var result = await mediator.Send(new CancelOrderCommand(id, req.Reason), ct);
+            return result.ToHttpResult();
         });
 
-        orders.MapPost("/{id:guid}/refund-request", async (Guid id, RefundRequestInputDto req, ISender mediator) =>
+        orders.MapPost("/{id:guid}/refund-request", async (Guid id, RefundRequestInputDto req, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Accepted();
+            var result = await mediator.Send(new RequestOrderRefundCommand(id, req.Reason), ct);
+            return result.ToHttpResult();
         });
 
         var adminOrders = group.MapGroup("/admin/orders")
             .WithTags("Admin Orders")
             .RequireAuthorization();
 
-        adminOrders.MapGet("/", async (string? status, int? page, int? pageSize, ISender mediator) =>
+        adminOrders.MapGet("/", async (string? status, int? page, int? pageSize, ISender mediator, CancellationToken ct) =>
         {
-            return Results.Ok(new OrderListResponse(Array.Empty<OrderSummaryDto>(), 0, page ?? 1, pageSize ?? 20));
+            var pIndex = (page ?? 1) - 1;
+            var pSize = Math.Min(pageSize ?? 20, 100);
+            var result = await mediator.Send(new SearchOrdersQuery(status, null, null, null, pIndex <= 0 ? 0 : pIndex, pSize <= 0 ? 20 : pSize), ct);
+            return result.ToHttpResult();
         });
 
-        adminOrders.MapPost("/{id:guid}/process", async (Guid id, ISender mediator) =>
+        adminOrders.MapPost("/{id:guid}/process", async (Guid id, ISender mediator, CancellationToken ct) =>
         {
-            return Results.NoContent();
-        });
-
-        adminOrders.MapPost("/{id:guid}/notes", async (Guid id, AddOrderNoteRequest req, ISender mediator) =>
-        {
-            return Results.NoContent();
+            var result = await mediator.Send(new StartOrderProcessingCommand(id), ct);
+            return result.ToHttpResult();
         });
 
         return group;
     }
-
-    private record OrderListResponse(OrderSummaryDto[] Items, int TotalCount, int Page, int PageSize);
-    private record OrderSummaryDto(Guid Id, string OrderNumber, string Status, MoneyDto Total, DateTime PlacedAtUtc);
 }

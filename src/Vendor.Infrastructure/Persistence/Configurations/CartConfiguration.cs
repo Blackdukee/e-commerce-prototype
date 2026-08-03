@@ -20,6 +20,7 @@ public class CartConfiguration : IEntityTypeConfiguration<Cart>
                 id => id.HasValue ? id.Value.Value : (Guid?)null,
                 val => val.HasValue ? new CustomerId(val.Value) : null);
 
+        builder.Navigation(x => x.Items).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.OwnsMany(x => x.Items, i =>
         {
             i.WithOwner().HasForeignKey("CartId");

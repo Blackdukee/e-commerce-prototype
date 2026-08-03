@@ -55,11 +55,10 @@ public class CheckoutOrderCommandHandler(
         var orderId = OrderId.New();
         var currency = cart.Items.First().UnitPrice.Currency;
         var orderLines = new List<OrderLine>();
-        var productsToUpdate = new List<Product>();
 
         foreach (var cartItem in cart.Items)
         {
-            var product = await productRepository.GetByIdAsync(new ProductId(cartItem.ProductVariantId.Value), ct);
+            var product = await productRepository.GetByVariantIdAsync(cartItem.ProductVariantId, ct);
             if (product == null)
             {
                 return Error.NotFound("ProductVariant", cartItem.ProductVariantId);
@@ -77,7 +76,6 @@ public class CheckoutOrderCommandHandler(
             }
 
             product.DeductStock(cartItem.ProductVariantId, cartItem.Quantity);
-            productsToUpdate.Add(product);
 
             orderLines.Add(new OrderLine(
                 orderId,
