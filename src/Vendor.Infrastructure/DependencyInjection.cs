@@ -32,6 +32,7 @@ using Vendor.Infrastructure.Tax;
 using Vendor.Infrastructure.Payments.Webhooks;
 using Vendor.Infrastructure.Storage;
 using Vendor.Infrastructure.Realtime;
+using Vendor.Infrastructure.Security.Resolvers;
 
 namespace Vendor.Infrastructure;
 
@@ -42,6 +43,7 @@ public static class DependencyInjection
         services.AddHttpContextAccessor();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddSingleton<OutboxInterceptor>();
+        services.AddSingleton<Vendor.Application.Common.Interfaces.ISecretResolver, CompositeSecretResolver>();
 
         services.AddMemoryCache();
 
