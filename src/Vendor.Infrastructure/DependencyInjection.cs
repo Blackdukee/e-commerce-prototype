@@ -26,7 +26,7 @@ using Vendor.Infrastructure.Persistence;
 using Vendor.Infrastructure.Persistence.Repositories;
 using Vendor.Infrastructure.Tax;
 using Vendor.Infrastructure.Payments.Webhooks;
-
+using Vendor.Infrastructure.Storage;
 
 namespace Vendor.Infrastructure;
 
@@ -153,6 +153,44 @@ public static class DependencyInjection
         services.AddScoped<IWebhookParser, PaymobWebhookParser>();
         services.AddScoped<IWebhookParser, PaypalWebhookParser>();
         services.AddScoped<IWebhookParserFactory, WebhookParserFactory>();
+
+        // Register File Storage Service (Hybrid S3 / Local Storage)
+        services.AddSingleton<LocalStorageService>(sp =>
+        {
+            var env = sp.GetService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>();
+            var rootPath = env != null
+                ? Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "uploads")
+                : Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+            return new LocalStorageService(rootPath);
+        });
+
+        services.AddSingleton<IFileStorageService>(sp =>
+        {
+            var config = sp.GetRequiredService<IConfiguration>();
+            var localService = sp.GetRequiredService<LocalStorageService>();
+
+            var bucketName = config["AWS:S3:BucketName"] ?? config["AWS:BucketName"] ?? config["AWS_S3_BUCKET_NAME"];
+            var accessKey = config["AWS:AccessKey"] ?? config["AWS_ACCESS_KEY_ID"];
+            var secretKey = config["AWS:SecretKey"] ?? config["AWS_SECRET_ACCESS_KEY"];
+            var region = config["AWS:Region"] ?? config["AWS_REGION"] ?? "us-east-1";
+
+            AwsS3StorageService? s3Service = null;
+            if (!string.IsNullOrWhiteSpace(bucketName))
+            {
+                Amazon.S3.IAmazonS3 s3Client;
+                if (!string.IsNullOrWhiteSpace(accessKey) && !string.IsNullOrWhiteSpace(secretKey))
+                {
+                    s3Client = new Amazon.S3.AmazonS3Client(accessKey, secretKey, Amazon.RegionEndpoint.GetBySystemName(region));
+                }
+                else
+                {
+                    s3Client = new Amazon.S3.AmazonS3Client(Amazon.RegionEndpoint.GetBySystemName(region));
+                }
+                s3Service = new AwsS3StorageService(s3Client, bucketName);
+            }
+
+            return new HybridFileStorageService(localService, s3Service);
+        });
 
 
         // Resolve JWT secret from configuration — validated at startup by IOptions<JwtOptions> in the API layer
