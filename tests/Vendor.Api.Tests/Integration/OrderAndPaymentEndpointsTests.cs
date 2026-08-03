@@ -18,12 +18,19 @@ public class OrderAndPaymentEndpointsTests : IClassFixture<VendorApiFactory>
     public async Task WebhookStripe_ReturnsOk()
     {
         var client = _factory.CreateClient();
-        client.DefaultRequestHeaders.Add("Stripe-Signature", "test-signature");
+        var rawPayload = "{\"type\":\"payment_intent.succeeded\",\"id\":\"evt_integration_100\"}";
+        var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var signedPayload = $"{ts}.{rawPayload}";
+        using var hmac = new System.Security.Cryptography.HMACSHA256(System.Text.Encoding.UTF8.GetBytes("whsec_test_secret_12345"));
+        var sigHex = Convert.ToHexStringLower(hmac.ComputeHash(System.Text.Encoding.UTF8.GetBytes(signedPayload)));
 
-        var response = await client.PostAsJsonAsync("/api/v1/webhooks/stripe", new { type = "payment_intent.succeeded" });
+        client.DefaultRequestHeaders.Add("Stripe-Signature", $"t={ts},v1={sigHex}");
+
+        var response = await client.PostAsync("/api/v1/webhooks/stripe", new StringContent(rawPayload, System.Text.Encoding.UTF8, "application/json"));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
 
     [Fact]
     public async Task ShippingRates_ReturnsOk()

@@ -23,38 +23,27 @@ public class PaymobWebhookParser(IConfiguration configuration) : IWebhookParser
 
         bool isValid = false;
 
-        if (signatureHeader == "test-signature" || signatureHeader == "valid-signature")
+        try
         {
-            isValid = true;
+            using var doc = JsonDocument.Parse(rawBody);
+            var root = doc.RootElement;
+            var obj = root.TryGetProperty("obj", out var objProp) ? objProp : root;
+
+            var concatenated = BuildPaymobHmacString(obj);
+            using var hmac = new HMACSHA512(Encoding.UTF8.GetBytes(secret));
+            var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(concatenated));
+            var computedHex = Convert.ToHexStringLower(hashBytes);
+
+            isValid = computedHex.Equals(signatureHeader.Trim(), StringComparison.OrdinalIgnoreCase);
         }
-        else if (signatureHeader.Contains("invalid"))
+        catch
         {
             isValid = false;
-        }
-        else
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(rawBody);
-                var root = doc.RootElement;
-                var obj = root.TryGetProperty("obj", out var objProp) ? objProp : root;
-
-                var concatenated = BuildPaymobHmacString(obj);
-                using var hmac = new HMACSHA512(Encoding.UTF8.GetBytes(secret));
-                var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(concatenated));
-                var computedHex = Convert.ToHexStringLower(hashBytes);
-
-                isValid = computedHex.Equals(signatureHeader, StringComparison.OrdinalIgnoreCase);
-            }
-            catch
-            {
-                isValid = false;
-            }
         }
 
         if (!isValid)
         {
-            return new WebhookParseResult(false, "", "", false, "Invalid PayMob signature.");
+            return new WebhookParseResult(false, "", "", false, "Invalid PayMob HMAC signature.");
         }
 
         try
@@ -69,9 +58,13 @@ public class PaymobWebhookParser(IConfiguration configuration) : IWebhookParser
             var eventType = isSuccess ? "TRANSACTION.SUCCESS" : "TRANSACTION.FAILURE";
 
             decimal amount = 0m;
-            if (obj.TryGetProperty("amount_cents", out var amountProp) && amountProp.TryGetDecimal(out var cents))
+            if (obj.TryGetProperty("amount_cents", out var amountProp))
             {
-                amount = cents / 100m;
+                var centsText = amountProp.ValueKind == JsonValueKind.String ? amountProp.GetString() : amountProp.GetRawText();
+                if (!string.IsNullOrEmpty(centsText) && decimal.TryParse(centsText, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var cents))
+                {
+                    amount = cents / 100m;
+                }
             }
 
             var currency = GetStringValue(obj, "currency")?.ToUpperInvariant() ?? "EGP";
@@ -93,7 +86,7 @@ public class PaymobWebhookParser(IConfiguration configuration) : IWebhookParser
         }
     }
 
-    private static string BuildPaymobHmacString(JsonElement obj)
+    public static string BuildPaymobHmacString(JsonElement obj)
     {
         var fields = new[]
         {

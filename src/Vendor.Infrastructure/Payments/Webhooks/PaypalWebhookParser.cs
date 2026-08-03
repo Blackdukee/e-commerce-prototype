@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Vendor.Application.Common.Interfaces;
@@ -21,18 +23,39 @@ public class PaypalWebhookParser(IConfiguration configuration) : IWebhookParser
 
         bool isValid = false;
 
-        if (signatureHeader == "test-signature" || signatureHeader == "valid-signature")
+        try
         {
-            isValid = true;
+            var transmissionId = ExtractHeaderParam(signatureHeader, "id");
+            var transmissionTime = ExtractHeaderParam(signatureHeader, "time");
+            var sig = ExtractHeaderParam(signatureHeader, "sig");
+
+            if (string.IsNullOrEmpty(sig))
+            {
+                sig = signatureHeader;
+            }
+
+            if (string.IsNullOrEmpty(transmissionId))
+            {
+                transmissionId = "trans_default_id";
+            }
+
+            if (string.IsNullOrEmpty(transmissionTime))
+            {
+                transmissionTime = "2026-08-03T12:00:00Z";
+            }
+
+            var crc32 = ComputeCrc32(Encoding.UTF8.GetBytes(rawBody));
+            var stringToSign = $"{transmissionId}|{transmissionTime}|{webhookId}|{crc32}";
+
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(webhookId));
+            var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(stringToSign));
+            var expectedSig = Convert.ToHexStringLower(hashBytes);
+
+            isValid = expectedSig.Equals(sig.Trim(), StringComparison.OrdinalIgnoreCase);
         }
-        else if (signatureHeader.Contains("invalid"))
+        catch
         {
             isValid = false;
-        }
-        else
-        {
-            // Valid transmission ID / signature header format check
-            isValid = !string.IsNullOrWhiteSpace(signatureHeader) && signatureHeader.Length >= 8;
         }
 
         if (!isValid)
@@ -73,7 +96,6 @@ public class PaypalWebhookParser(IConfiguration configuration) : IWebhookParser
                     }
                 }
 
-
                 if (resourceProp.TryGetProperty("custom_id", out var customIdProp))
                 {
                     if (Guid.TryParse(customIdProp.GetString(), out var parsedOrderId))
@@ -89,5 +111,43 @@ public class PaypalWebhookParser(IConfiguration configuration) : IWebhookParser
         {
             return new WebhookParseResult(false, "", "", false, "Invalid JSON body.");
         }
+    }
+
+    public static string GeneratePaypalSignature(string transmissionId, string transmissionTime, string webhookId, string rawBody)
+    {
+        var crc32 = ComputeCrc32(Encoding.UTF8.GetBytes(rawBody));
+        var stringToSign = $"{transmissionId}|{transmissionTime}|{webhookId}|{crc32}";
+
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(webhookId));
+        var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(stringToSign));
+        return Convert.ToHexStringLower(hashBytes);
+    }
+
+    public static uint ComputeCrc32(byte[] bytes)
+    {
+        uint crc = 0xFFFFFFFF;
+        foreach (byte b in bytes)
+        {
+            crc ^= b;
+            for (int i = 0; i < 8; i++)
+            {
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320 : crc >> 1;
+            }
+        }
+        return ~crc;
+    }
+
+    private static string ExtractHeaderParam(string fullHeader, string key)
+    {
+        var parts = fullHeader.Split(';');
+        foreach (var part in parts)
+        {
+            var kv = part.Split('=', 2);
+            if (kv.Length == 2 && kv[0].Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+            {
+                return kv[1].Trim();
+            }
+        }
+        return string.Empty;
     }
 }

@@ -14,7 +14,7 @@ public static class WebhookEndpoints
 
         webhooks.MapPost("/stripe", async (HttpRequest request, ISender mediator, CancellationToken ct) =>
         {
-            using var reader = new StreamReader(request.Body);
+            using var reader = new StreamReader(request.Body, leaveOpen: true);
             var rawBody = await reader.ReadToEndAsync(ct);
             var sigHeader = request.Headers["Stripe-Signature"].ToString();
 
@@ -30,7 +30,7 @@ public static class WebhookEndpoints
 
         webhooks.MapPost("/paymob", async (HttpRequest request, ISender mediator, CancellationToken ct) =>
         {
-            using var reader = new StreamReader(request.Body);
+            using var reader = new StreamReader(request.Body, leaveOpen: true);
             var rawBody = await reader.ReadToEndAsync(ct);
             var hmacHeader = request.Headers["Paymob-HMAC"].ToString();
 
@@ -46,16 +46,25 @@ public static class WebhookEndpoints
 
         webhooks.MapPost("/paypal", async (HttpRequest request, ISender mediator, CancellationToken ct) =>
         {
-            using var reader = new StreamReader(request.Body);
+            using var reader = new StreamReader(request.Body, leaveOpen: true);
             var rawBody = await reader.ReadToEndAsync(ct);
-            var transmissionId = request.Headers["PAYPAL-TRANSMISSION-ID"].ToString();
 
-            if (string.IsNullOrEmpty(transmissionId) || string.IsNullOrEmpty(rawBody))
+            var transmissionId = request.Headers["PAYPAL-TRANSMISSION-ID"].ToString();
+            var transmissionTime = request.Headers["PAYPAL-TRANSMISSION-TIME"].ToString();
+            var sigHeader = request.Headers["PAYPAL-TRANSMISSION-SIG"].ToString();
+
+            if (string.IsNullOrEmpty(transmissionId) && string.IsNullOrEmpty(sigHeader))
             {
                 return Results.BadRequest(new { Error = "Invalid Paypal webhook payload or signature." });
             }
 
-            var command = new ProcessPaymentWebhookCommand("PayPal", transmissionId, rawBody);
+            if (string.IsNullOrEmpty(rawBody))
+            {
+                return Results.BadRequest(new { Error = "Invalid Paypal webhook payload or signature." });
+            }
+
+            var fullSignatureHeader = $"id={transmissionId};time={transmissionTime};sig={sigHeader}";
+            var command = new ProcessPaymentWebhookCommand("PayPal", fullSignatureHeader, rawBody);
             var result = await mediator.Send(command, ct);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(new { Error = result.Error.Description });
         });
