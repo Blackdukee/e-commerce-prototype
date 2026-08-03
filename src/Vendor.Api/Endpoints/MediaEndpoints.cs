@@ -12,6 +12,7 @@ public static class MediaEndpoints
         var media = group.MapGroup("/media").WithTags("Media");
 
         media.MapGet("/presigned-url", async (string? fileName, string? contentType, int? expirationMinutes, IFileStorageService storageService, CancellationToken ct) =>
+
         {
             if (string.IsNullOrWhiteSpace(fileName))
             {
@@ -23,7 +24,7 @@ public static class MediaEndpoints
 
             var uploadUrl = await storageService.GeneratePresignedUploadUrlAsync(fileName, effectiveContentType, expiration, ct);
             return Results.Ok(new { Url = uploadUrl, FileName = fileName });
-        });
+        }).RequireAuthorization();
 
         return group;
     }

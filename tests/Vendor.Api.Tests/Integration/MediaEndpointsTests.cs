@@ -18,7 +18,7 @@ public class MediaEndpointsTests : IClassFixture<VendorApiFactory>
     [Fact]
     public async Task GetPresignedUrl_WithValidFileName_ReturnsOkAndUrl()
     {
-        var client = _factory.CreateClient();
+        var client = _factory.CreateClient().WithCustomerBearerToken();
         var response = await client.GetAsync("/api/v1/media/presigned-url?fileName=avatar.png&contentType=image/png");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -31,10 +31,19 @@ public class MediaEndpointsTests : IClassFixture<VendorApiFactory>
     [Fact]
     public async Task GetPresignedUrl_WithoutFileName_ReturnsBadRequest()
     {
-        var client = _factory.CreateClient();
+        var client = _factory.CreateClient().WithCustomerBearerToken();
         var response = await client.GetAsync("/api/v1/media/presigned-url");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task GetPresignedUrl_WithoutAuth_ReturnsUnauthorized()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/v1/media/presigned-url?fileName=avatar.png");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     private record PresignedUrlResponse(string Url, string FileName);
