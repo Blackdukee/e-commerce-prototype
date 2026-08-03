@@ -44,6 +44,7 @@ public class HybridCacheService(IMemoryCache memoryCache, IConnectionMultiplexer
                 var db = connectionMultiplexer.GetDatabase();
                 var json = JsonSerializer.Serialize(value);
                 await db.StringSetAsync(key, json, exp);
+                memoryCache.Remove(key);
                 return;
             }
             catch
@@ -63,6 +64,7 @@ public class HybridCacheService(IMemoryCache memoryCache, IConnectionMultiplexer
             {
                 var db = connectionMultiplexer.GetDatabase();
                 await db.KeyDeleteAsync(key);
+                memoryCache.Remove(key);
                 return;
             }
             catch

@@ -38,23 +38,22 @@ public static class DependencyInjection
 
         services.AddMemoryCache();
 
-        var redisConnectionString = configuration.GetConnectionString("Redis");
-        if (!string.IsNullOrEmpty(redisConnectionString))
+        services.AddSingleton<IConnectionMultiplexer>(sp =>
         {
+            var redisConnectionString = configuration.GetConnectionString("Redis");
+            if (string.IsNullOrEmpty(redisConnectionString)) return null!;
+
             try
             {
-                services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
-                services.AddStackExchangeRedisCache(options =>
-                {
-                    options.Configuration = redisConnectionString;
-                    options.InstanceName = "vendor:";
-                });
+                var options = ConfigurationOptions.Parse(redisConnectionString);
+                options.AbortOnConnectFail = false;
+                return ConnectionMultiplexer.Connect(options);
             }
             catch
             {
-                // Ignore Redis initialization errors during startup; fallback to memory cache
+                return null!;
             }
-        }
+        });
 
         // Bind ICacheService as Singleton to HybridCacheService with IMemoryCache fallback
         services.AddSingleton<ICacheService>(sp =>
