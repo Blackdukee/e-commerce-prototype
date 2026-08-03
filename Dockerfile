@@ -1,47 +1,36 @@
-# Build Stage
+# Stage 1: Build & Publish
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy solution and csproj files for restore caching
-COPY Vendor.slnx ./
-COPY src/Vendor.Domain/Vendor.Domain.csproj src/Vendor.Domain/
-COPY src/Vendor.Application/Vendor.Application.csproj src/Vendor.Application/
-COPY src/Vendor.Infrastructure/Vendor.Infrastructure.csproj src/Vendor.Infrastructure/
-COPY src/Vendor.Api/Vendor.Api.csproj src/Vendor.Api/
-COPY tests/Vendor.Domain.Tests/Vendor.Domain.Tests.csproj tests/Vendor.Domain.Tests/
-COPY tests/Vendor.Application.Tests/Vendor.Application.Tests.csproj tests/Vendor.Application.Tests/
-COPY tests/Vendor.Infrastructure.Tests/Vendor.Infrastructure.Tests.csproj tests/Vendor.Infrastructure.Tests/
-COPY tests/Vendor.Api.Tests/Vendor.Api.Tests.csproj tests/Vendor.Api.Tests/
+# Copy project files for layer caching
+COPY ["src/Vendor.Api/Vendor.Api.csproj", "src/Vendor.Api/"]
+COPY ["src/Vendor.Application/Vendor.Application.csproj", "src/Vendor.Application/"]
+COPY ["src/Vendor.Domain/Vendor.Domain.csproj", "src/Vendor.Domain/"]
+COPY ["src/Vendor.Infrastructure/Vendor.Infrastructure.csproj", "src/Vendor.Infrastructure/"]
+COPY ["Vendor.slnx", "./"]
 
-RUN dotnet restore Vendor.slnx
+RUN dotnet restore "src/Vendor.Api/Vendor.Api.csproj"
 
-# Copy all source files
+# Copy remaining source code
 COPY . .
+WORKDIR "/src/src/Vendor.Api"
+RUN dotnet publish "Vendor.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false --no-restore
 
-# Build and Publish API
-WORKDIR /src/src/Vendor.Api
-RUN dotnet publish Vendor.Api.csproj -c Release -o /app/publish /p:UseAppHost=false
-
-# Final Runtime Stage
+# Stage 2: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
-# Install curl for container health check
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Non-root user execution
+USER app
 
-# Create non-root user and group
-RUN groupadd -g 10001 appgroup && \
-    useradd -u 10001 -g appgroup -s /bin/false appuser && \
-    chown -R appuser:appgroup /app
-
-USER appuser:appgroup
-
-COPY --chown=appuser:appgroup --from=build /app/publish .
-
-ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
 
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl --fail http://localhost:8080/health/live || exit 1
+VOLUME ["/app/config", "/app/theme"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8080/health/live || exit 1
+
+COPY --from=build /app/publish .
 
 ENTRYPOINT ["dotnet", "Vendor.Api.dll"]
