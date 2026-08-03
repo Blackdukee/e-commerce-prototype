@@ -89,6 +89,11 @@ if (!app.Environment.IsEnvironment("Testing"))
         "outbox-cleanup",
         job => job.PurgeOldProcessedMessagesAsync(CancellationToken.None),
         Cron.Daily(2));
+
+    RecurringJob.AddOrUpdate<Vendor.Infrastructure.Search.ProductIndexSyncJob>(
+        "product-index-sync",
+        job => job.ExecuteAsync(CancellationToken.None),
+        "*/5 * * * *");
 }
 
 // Swagger UI in Development / Local

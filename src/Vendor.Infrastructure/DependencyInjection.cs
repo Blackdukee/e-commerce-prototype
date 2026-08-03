@@ -1,3 +1,4 @@
+using Elastic.Clients.Elasticsearch;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using Vendor.Application.Common.Interfaces;
 using Vendor.Application.Interfaces;
@@ -24,6 +26,8 @@ using Vendor.Infrastructure.Outbox;
 using Vendor.Infrastructure.Payments;
 using Vendor.Infrastructure.Persistence;
 using Vendor.Infrastructure.Persistence.Repositories;
+using Vendor.Infrastructure.Search;
+using Vendor.Infrastructure.Shipping;
 using Vendor.Infrastructure.Tax;
 using Vendor.Infrastructure.Payments.Webhooks;
 using Vendor.Infrastructure.Storage;
@@ -147,12 +151,79 @@ public static class DependencyInjection
         services.AddSingleton<PaymobPaymentGateway>();
         services.AddSingleton<IPaymentGatewayFactory, PaymentGatewayFactory>();
         services.AddScoped<IPaymentGateway, StripePaymentGateway>();
-        services.AddScoped<ITaxCalculator, FlatTaxCalculator>();
         services.AddScoped<IOutboxService, OutboxService>();
         services.AddScoped<IWebhookParser, StripeWebhookParser>();
         services.AddScoped<IWebhookParser, PaymobWebhookParser>();
         services.AddScoped<IWebhookParser, PaypalWebhookParser>();
         services.AddScoped<IWebhookParserFactory, WebhookParserFactory>();
+
+        // Search: Elasticsearch when configured, EF Core fallback
+        services.AddScoped<EfCoreProductSearchService>();
+        var esUri = configuration["Elasticsearch:Uri"];
+        if (!string.IsNullOrWhiteSpace(esUri))
+        {
+            services.AddSingleton<ElasticsearchClient>(_ =>
+                new ElasticsearchClient(new ElasticsearchClientSettings(new Uri(esUri))));
+            var esIndex = configuration["Elasticsearch:IndexName"] ?? "products";
+            services.AddScoped<ElasticsearchProductSearchService>(sp =>
+                new ElasticsearchProductSearchService(
+                    sp.GetRequiredService<ElasticsearchClient>(), esIndex));
+            services.AddScoped<IProductSearchService>(sp =>
+                new HybridProductSearchService(
+                    sp.GetRequiredService<EfCoreProductSearchService>(),
+                    sp.GetRequiredService<ElasticsearchProductSearchService>()));
+        }
+        else
+        {
+            services.AddScoped<IProductSearchService>(sp =>
+                new HybridProductSearchService(
+                    sp.GetRequiredService<EfCoreProductSearchService>(), null));
+        }
+        services.AddScoped<ProductIndexSyncJob>();
+
+        // Shipping: Shippo when configured, FlatRate fallback
+        services.AddScoped<FlatRateShippingProvider>();
+        var shippoApiKey = configuration["Shippo:ApiKey"];
+        if (!string.IsNullOrWhiteSpace(shippoApiKey))
+        {
+            services.AddHttpClient("ShippoClient", client =>
+                client.BaseAddress = new Uri("https://api.goshippo.com/"));
+            services.AddScoped<IShippingProvider>(sp =>
+                new HybridShippingProvider(
+                    sp.GetRequiredService<FlatRateShippingProvider>(),
+                    new ShippoShippingProvider(
+                        sp.GetRequiredService<IHttpClientFactory>().CreateClient("ShippoClient"),
+                        shippoApiKey),
+                    sp.GetService<ILogger<HybridShippingProvider>>()));
+        }
+        else
+        {
+            services.AddScoped<IShippingProvider>(sp =>
+                new HybridShippingProvider(
+                    sp.GetRequiredService<FlatRateShippingProvider>()));
+        }
+
+        // Tax: TaxJar when configured, FlatTax fallback
+        services.AddScoped<FlatTaxCalculator>();
+        var taxJarApiKey = configuration["TaxJar:ApiKey"];
+        if (!string.IsNullOrWhiteSpace(taxJarApiKey))
+        {
+            services.AddHttpClient("TaxJarClient", client =>
+                client.BaseAddress = new Uri("https://api.taxjar.com/v2/"));
+            services.AddScoped<ITaxCalculator>(sp =>
+                new HybridTaxCalculator(
+                    sp.GetRequiredService<FlatTaxCalculator>(),
+                    new TaxJarTaxCalculator(
+                        sp.GetRequiredService<IHttpClientFactory>().CreateClient("TaxJarClient"),
+                        taxJarApiKey),
+                    sp.GetService<ILogger<HybridTaxCalculator>>()));
+        }
+        else
+        {
+            services.AddScoped<ITaxCalculator>(sp =>
+                new HybridTaxCalculator(
+                    sp.GetRequiredService<FlatTaxCalculator>()));
+        }
 
         // Register File Storage Service (Hybrid S3 / Local Storage)
         services.AddSingleton<LocalStorageService>(sp =>
