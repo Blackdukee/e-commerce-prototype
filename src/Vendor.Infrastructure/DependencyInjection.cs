@@ -31,6 +31,7 @@ using Vendor.Infrastructure.Shipping;
 using Vendor.Infrastructure.Tax;
 using Vendor.Infrastructure.Payments.Webhooks;
 using Vendor.Infrastructure.Storage;
+using Vendor.Infrastructure.Realtime;
 
 namespace Vendor.Infrastructure;
 
@@ -308,6 +309,16 @@ public static class DependencyInjection
                 emailConfig.SenderAddress,
                 emailConfig.SenderName);
         });
+
+        // Real-time SignalR Notifier & Hub backplane
+        services.AddScoped<IRealtimeNotifier, SignalRRealtimeNotifier>();
+
+        var signalRBuilder = services.AddSignalR();
+        var redisConnectionString = configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrWhiteSpace(redisConnectionString))
+        {
+            signalRBuilder.AddStackExchangeRedis(redisConnectionString);
+        }
 
         // Default VendorConfig singleton for boot
         services.AddSingleton(CreateDefaultVendorConfig());
