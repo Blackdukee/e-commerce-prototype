@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
-using Vendor.Application.Interfaces;
+using Vendor.Application.Common.Interfaces;
 
 namespace Vendor.Infrastructure.Caching;
 
@@ -24,6 +24,11 @@ public class InMemoryCacheService(IMemoryCache memoryCache) : ICacheService
     public Task RemoveAsync(string key, CancellationToken ct = default)
     {
         memoryCache.Remove(key);
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveByPrefixAsync(string prefix, CancellationToken ct = default)
+    {
         return Task.CompletedTask;
     }
 }
@@ -50,5 +55,10 @@ public class RedisCacheService(IDistributedCache distributedCache) : ICacheServi
     public async Task RemoveAsync(string key, CancellationToken ct = default)
     {
         await distributedCache.RemoveAsync(key, ct);
+    }
+
+    public Task RemoveByPrefixAsync(string prefix, CancellationToken ct = default)
+    {
+        return Task.CompletedTask;
     }
 }

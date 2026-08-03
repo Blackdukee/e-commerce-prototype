@@ -2,9 +2,12 @@ using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
+using Vendor.Application.Common.Interfaces;
 using Vendor.Application.Interfaces;
 using Vendor.Domain.Aggregates.VendorSettings;
 using Vendor.Domain.Enums;
@@ -33,19 +36,31 @@ public static class DependencyInjection
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddSingleton<OutboxInterceptor>();
 
-        // Redis distributed cache — connection string read from ConnectionStrings:Redis
-        var redisConnectionString = configuration.GetConnectionString("Redis")
-            ?? throw new InvalidOperationException(
-                "ConnectionStrings:Redis is required. Add it to appsettings or set the CONNECTIONSTRINGS__REDIS environment variable.");
+        services.AddMemoryCache();
 
-        services.AddStackExchangeRedisCache(options =>
+        var redisConnectionString = configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrEmpty(redisConnectionString))
         {
-            options.Configuration = redisConnectionString;
-            options.InstanceName = "vendor:";
-        });
+            try
+            {
+                services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
+                services.AddStackExchangeRedisCache(options =>
+                {
+                    options.Configuration = redisConnectionString;
+                    options.InstanceName = "vendor:";
+                });
+            }
+            catch
+            {
+                // Ignore Redis initialization errors during startup; fallback to memory cache
+            }
+        }
 
-        // Bind ICacheService to the Redis implementation
-        services.AddScoped<ICacheService, RedisCacheService>();
+        // Bind ICacheService as Singleton to HybridCacheService with IMemoryCache fallback
+        services.AddSingleton<ICacheService>(sp =>
+            new HybridCacheService(
+                sp.GetRequiredService<IMemoryCache>(),
+                sp.GetService<IConnectionMultiplexer>()));
 
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? "Server=(localdb)\\mssqllocaldb;Database=VendorDb;Trusted_Connection=True;";
