@@ -1,11 +1,16 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using Vendor.Application.Common.Interfaces;
 
 namespace Vendor.Infrastructure.Caching;
 
-public class HybridCacheService(IMemoryCache memoryCache, IConnectionMultiplexer? connectionMultiplexer = null) : ICacheService
+public class HybridCacheService(
+    IMemoryCache memoryCache,
+    IConnectionMultiplexer? connectionMultiplexer = null,
+    ILogger<HybridCacheService>? logger = null) : ICacheService
 {
     public async Task<T?> GetAsync<T>(string key, CancellationToken ct = default)
     {
@@ -21,9 +26,10 @@ public class HybridCacheService(IMemoryCache memoryCache, IConnectionMultiplexer
                 }
                 return default;
             }
-            catch
+            catch (Exception ex) when (ex is RedisException or RedisTimeoutException)
             {
-                // Fall back to MemoryCache on Redis exception
+                logger?.LogWarning(ex, "Redis operation failed in GetAsync for key '{Key}', falling back to IMemoryCache.", key);
+                Debug.WriteLine($"Redis exception in GetAsync: {ex}");
             }
         }
 
@@ -47,9 +53,10 @@ public class HybridCacheService(IMemoryCache memoryCache, IConnectionMultiplexer
                 memoryCache.Remove(key);
                 return;
             }
-            catch
+            catch (Exception ex) when (ex is RedisException or RedisTimeoutException)
             {
-                // Fall back to MemoryCache on Redis exception
+                logger?.LogWarning(ex, "Redis operation failed in SetAsync for key '{Key}', falling back to IMemoryCache.", key);
+                Debug.WriteLine($"Redis exception in SetAsync: {ex}");
             }
         }
 
@@ -67,9 +74,10 @@ public class HybridCacheService(IMemoryCache memoryCache, IConnectionMultiplexer
                 memoryCache.Remove(key);
                 return;
             }
-            catch
+            catch (Exception ex) when (ex is RedisException or RedisTimeoutException)
             {
-                // Fall back to MemoryCache on Redis exception
+                logger?.LogWarning(ex, "Redis operation failed in RemoveAsync for key '{Key}', falling back to IMemoryCache.", key);
+                Debug.WriteLine($"Redis exception in RemoveAsync: {ex}");
             }
         }
 
@@ -95,9 +103,10 @@ public class HybridCacheService(IMemoryCache memoryCache, IConnectionMultiplexer
                 }
                 return;
             }
-            catch
+            catch (Exception ex) when (ex is RedisException or RedisTimeoutException)
             {
-                // Fall back gracefully if Redis server key search fails
+                logger?.LogWarning(ex, "Redis operation failed in RemoveByPrefixAsync for prefix '{Prefix}', falling back to IMemoryCache.", prefix);
+                Debug.WriteLine($"Redis exception in RemoveByPrefixAsync: {ex}");
             }
         }
 

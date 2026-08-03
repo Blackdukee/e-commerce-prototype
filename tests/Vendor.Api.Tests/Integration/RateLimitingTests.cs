@@ -79,4 +79,23 @@ public class RateLimitingTests : IClassFixture<VendorApiFactory>
         // Assert - client 2 request should NOT be rate limited (not 429)
         responseClient2.StatusCode.Should().NotBe(HttpStatusCode.TooManyRequests);
     }
+
+    [Fact]
+    public async Task RequestsWithoutForwardedHeader_FallbackToLoopbackIpRateLimiting()
+    {
+        // Arrange - client without X-Forwarded-For header falls back to loopback (127.0.0.1)
+        var client = _factory.CreateClient();
+        var loginRequest = new LoginRequest("test@example.com", "Password123!");
+        HttpResponseMessage? lastResponse = null;
+
+        // Act - Send 7 requests (auth-policy allows 5 per minute)
+        for (int i = 0; i < 7; i++)
+        {
+            lastResponse = await client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
+        }
+
+        // Assert
+        lastResponse.Should().NotBeNull();
+        lastResponse!.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+    }
 }

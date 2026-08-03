@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using Hangfire;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Vendor.Api.Extensions;
@@ -19,6 +20,12 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 
 // Add API, Application, and Infrastructure Services
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 builder.Services.AddApiLayerServices(builder.Configuration);
 builder.Services.AddCustomRateLimiting();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -39,6 +46,7 @@ using (var scope = app.Services.CreateScope())
 // Ordered Middleware Pipeline (9 Stages)
 // Stage 1: Exception Handler
 app.UseExceptionHandler();
+app.UseForwardedHeaders();
 
 // Stage 2: Security Headers
 app.UseMiddleware<SecurityHeadersMiddleware>();

@@ -59,7 +59,8 @@ public static class DependencyInjection
         services.AddSingleton<ICacheService>(sp =>
             new HybridCacheService(
                 sp.GetRequiredService<IMemoryCache>(),
-                sp.GetService<IConnectionMultiplexer>()));
+                sp.GetService<IConnectionMultiplexer>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<HybridCacheService>>()));
 
         var connectionString = configuration.GetConnectionString("DefaultConnection")
             ?? "Server=(localdb)\\mssqllocaldb;Database=VendorDb;Trusted_Connection=True;";

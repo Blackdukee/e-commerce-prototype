@@ -128,4 +128,33 @@ public class HybridCacheServiceTests
         // Act & Assert (should complete without throwing)
         await cacheService.RemoveByPrefixAsync("prefix_test_");
     }
+
+    [Fact]
+    public async Task SetAsync_And_GetAsync_HandlesRedisTimeoutException_Gracefully()
+    {
+        // Arrange
+        var memoryCache = new MemoryCache(new MemoryCacheOptions());
+        var redisMock = new Mock<IConnectionMultiplexer>();
+        var dbMock = new Mock<IDatabase>();
+
+        redisMock.Setup(r => r.IsConnected).Returns(true);
+        redisMock.Setup(r => r.GetDatabase(It.IsAny<int>(), It.IsAny<object>())).Returns(dbMock.Object);
+
+        dbMock.Setup(d => d.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(), It.IsAny<bool>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+            .ThrowsAsync(new RedisTimeoutException("Redis timeout exception", (CommandStatus)0));
+
+        dbMock.Setup(d => d.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ThrowsAsync(new RedisTimeoutException("Redis timeout exception", (CommandStatus)0));
+
+        var cacheService = new HybridCacheService(memoryCache, redisMock.Object);
+        var key = "timeout_key";
+        var value = "fallback_value_on_timeout";
+
+        // Act
+        await cacheService.SetAsync(key, value, TimeSpan.FromMinutes(5));
+        var cached = await cacheService.GetAsync<string>(key);
+
+        // Assert
+        Assert.Equal(value, cached);
+    }
 }

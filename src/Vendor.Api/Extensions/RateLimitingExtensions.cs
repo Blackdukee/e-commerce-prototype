@@ -42,26 +42,6 @@ public static class RateLimitingExtensions
 
     private static string ResolveClientIp(HttpContext httpContext)
     {
-        if (httpContext.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor) &&
-            !string.IsNullOrWhiteSpace(forwardedFor))
-        {
-            var ip = forwardedFor.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(ip))
-            {
-                return ip;
-            }
-        }
-
-        if (httpContext.Request.Headers.TryGetValue("X-Real-IP", out var realIp) &&
-            !string.IsNullOrWhiteSpace(realIp))
-        {
-            var ip = realIp.ToString().Trim();
-            if (!string.IsNullOrWhiteSpace(ip))
-            {
-                return ip;
-            }
-        }
-
-        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
     }
 }

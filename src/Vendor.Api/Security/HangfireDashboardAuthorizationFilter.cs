@@ -1,3 +1,4 @@
+using System.Net;
 using Hangfire.Annotations;
 using Hangfire.Dashboard;
 
@@ -8,10 +9,9 @@ public class HangfireDashboardAuthorizationFilter : IDashboardAuthorizationFilte
     public bool Authorize([NotNull] DashboardContext context)
     {
         var httpContext = context.GetHttpContext();
-        var host = httpContext.Request.Host.Host;
+        var remoteIp = httpContext.Connection.RemoteIpAddress;
 
-        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-            host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase))
+        if (remoteIp != null && IPAddress.IsLoopback(remoteIp))
         {
             return true;
         }
