@@ -206,27 +206,8 @@ public static class DependencyInjection
                     sp.GetRequiredService<FlatRateShippingProvider>()));
         }
 
-        // Tax: TaxJar when configured, FlatTax fallback
-        services.AddScoped<FlatTaxCalculator>();
-        var taxJarApiKey = configuration["TaxJar:ApiKey"];
-        if (!string.IsNullOrWhiteSpace(taxJarApiKey))
-        {
-            services.AddHttpClient("TaxJarClient", client =>
-                client.BaseAddress = new Uri("https://api.taxjar.com/v2/"));
-            services.AddScoped<ITaxCalculator>(sp =>
-                new HybridTaxCalculator(
-                    sp.GetRequiredService<FlatTaxCalculator>(),
-                    new TaxJarTaxCalculator(
-                        sp.GetRequiredService<IHttpClientFactory>().CreateClient("TaxJarClient"),
-                        taxJarApiKey),
-                    sp.GetService<ILogger<HybridTaxCalculator>>()));
-        }
-        else
-        {
-            services.AddScoped<ITaxCalculator>(sp =>
-                new HybridTaxCalculator(
-                    sp.GetRequiredService<FlatTaxCalculator>()));
-        }
+        // Tax: 14% Egyptian VAT (FlatTaxCalculator)
+        services.AddScoped<ITaxCalculator, FlatTaxCalculator>();
 
         // Register File Storage Service (Hybrid S3 / Local Storage)
         services.AddSingleton<LocalStorageService>(sp =>
@@ -339,8 +320,8 @@ public static class DependencyInjection
         );
         var runtime = new VendorRuntimeConfig(
             new BrandingConfig("https://logo.svg", null, "#2563EB", "#1E40AF", "Inter", "Meta Title", "Meta Desc", null),
-            new LocaleConfig("en", new[] { "en", "ar" }, "USD", new[] { "USD", "EUR" }, "UTC", TextDirection.Ltr),
-            new TaxConfig(TaxStrategy.Flat, 8.875m, false),
+            new LocaleConfig("ar", new[] { "ar", "en" }, "EGP", new[] { "EGP", "USD" }, "Africa/Cairo", TextDirection.Rtl),
+            new TaxConfig(TaxStrategy.Flat, 14.0m, false),
             new CheckoutConfig(true, 50, "ACM"),
             new[]
             {

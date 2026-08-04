@@ -4,7 +4,7 @@ using Vendor.Domain.ValueObjects;
 
 namespace Vendor.Infrastructure.Tax;
 
-public class FlatTaxCalculator : ITaxCalculator
+public class FlatTaxCalculator(decimal vatRate = 0.14m) : ITaxCalculator
 {
     public Task<Money> CalculateTaxAsync(
         IReadOnlyList<OrderLine> lines,
@@ -13,7 +13,7 @@ public class FlatTaxCalculator : ITaxCalculator
         CancellationToken ct = default)
     {
         var subtotal = lines.Sum(l => l.LineTotal.Amount);
-        var taxAmount = Math.Round(subtotal * 0.08875m, 2);
+        var taxAmount = Math.Round(subtotal * vatRate, 2);
         return Task.FromResult(new Money(taxAmount, currencyCode));
     }
 }
