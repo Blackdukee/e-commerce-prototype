@@ -13,7 +13,7 @@ public class OutboxProcessorJob(VendorDbContext dbContext, IPublisher publisher)
     {
         var messages = await dbContext.OutboxMessages
             .Where(m => m.Status == OutboxMessageStatus.Pending && m.RetryCount < 5)
-            .OrderBy(m => m.CreatedAtUtc)
+            .OrderBy(m => m.OccurredOnUtc)
             .Take(50)
             .ToListAsync(ct);
 

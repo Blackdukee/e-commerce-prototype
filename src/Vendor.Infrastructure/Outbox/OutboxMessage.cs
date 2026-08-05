@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace Vendor.Infrastructure.Outbox;
 
 public enum OutboxMessageStatus
@@ -14,6 +16,9 @@ public class OutboxMessage
     public string Type { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public DateTime OccurredOnUtc { get; set; }
+
+    /// <summary>Alias for OccurredOnUtc — not stored as a separate column.</summary>
+    [NotMapped]
     public DateTime CreatedAtUtc
     {
         get => OccurredOnUtc;
@@ -21,6 +26,9 @@ public class OutboxMessage
     }
 
     public DateTime? ProcessedOnUtc { get; set; }
+
+    /// <summary>Alias for ProcessedOnUtc — not stored as a separate column.</summary>
+    [NotMapped]
     public DateTime? ProcessedAtUtc
     {
         get => ProcessedOnUtc;

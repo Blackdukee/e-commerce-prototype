@@ -9,7 +9,7 @@ public class OutboxCleanupJob(VendorDbContext dbContext)
     {
         var cutoff = DateTime.UtcNow.AddDays(-7);
         await dbContext.OutboxMessages
-            .Where(m => m.Status == OutboxMessageStatus.Processed && m.ProcessedAtUtc < cutoff)
+            .Where(m => m.Status == OutboxMessageStatus.Processed && m.ProcessedOnUtc < cutoff)
             .ExecuteDeleteAsync(ct);
     }
 }
