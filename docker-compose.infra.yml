@@ -1,0 +1,54 @@
+# docker-compose.infra.yml
+# Starts only the infrastructure services needed for local development.
+# The API runs locally via: dotnet run --project src/Vendor.Api/Vendor.Api.csproj
+#
+# Usage:
+#   docker compose -f docker-compose.infra.yml up -d
+#   docker compose -f docker-compose.infra.yml down
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: vendor-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: vendor-mssql
+    restart: unless-stopped
+    ports:
+      - "14330:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStr0ng!Pass
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStr0ng!Pass' -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: vendor-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

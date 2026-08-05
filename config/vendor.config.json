@@ -93,6 +93,15 @@
             "apiKey": "ref:env:REDACTED_PAYMOB_API_KEY",
             "integrationId": "5592983"
           }
+        },
+        {
+          "providerName": "paypal",
+          "enabled": true,
+          "credentials": {
+            "clientId": "ref:env:REDACTED_PAYPAL_CLIENT_ID",
+            "secret": "ref:env:REDACTED_PAYPAL_SECRET"
+          },
+          "webhookId": "8M412019LX902760D"
         }
       ],
       "shipping": [

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Vendor.Infrastructure.Persistence;
@@ -20,6 +21,23 @@ public class VendorApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+
+        builder.ConfigureAppConfiguration((ctx, config) =>
+        {
+            // Pin connection strings: EF DbContext is replaced below with in-memory,
+            // but Hangfire still needs a real SQL Server — keep it on LocalDB so
+            // the Docker MSSQL container is never required during test runs.
+            // Webhook secrets are pinned so real API keys in appsettings.Development.json
+            // do not break integration test signature verification.
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=VendorDbHangfireTest;Integrated Security=True;Encrypt=False;TrustServerCertificate=True;",
+                ["ConnectionStrings:Redis"]             = "",
+                ["Stripe:WebhookSecret"]                = "whsec_test_secret_12345",
+                ["Paymob:HmacSecret"]                   = "paymob_hmac_secret_test",
+                ["Paypal:WebhookId"]                    = "paypal_wh_id_test",
+            });
+        });
 
         builder.ConfigureServices(services =>
         {
