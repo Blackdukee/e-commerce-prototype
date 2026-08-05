@@ -184,19 +184,20 @@ public static class DependencyInjection
         }
         services.AddScoped<ProductIndexSyncJob>();
 
-        // Shipping: Shippo when configured, FlatRate fallback
+        // Shipping: Bosta Egypt when configured, FlatRate fallback
         services.AddScoped<FlatRateShippingProvider>();
-        var shippoApiKey = configuration["Shippo:ApiKey"];
-        if (!string.IsNullOrWhiteSpace(shippoApiKey))
+        var bostaApiKey = configuration["Bosta:ApiKey"];
+        var bostaBaseUrl = configuration["Bosta:BaseUrl"] ?? "https://api.staging.bosta.co/v2/";
+        if (!string.IsNullOrWhiteSpace(bostaApiKey))
         {
-            services.AddHttpClient("ShippoClient", client =>
-                client.BaseAddress = new Uri("https://api.goshippo.com/"));
+            services.AddHttpClient("BostaClient", client =>
+                client.BaseAddress = new Uri(bostaBaseUrl));
             services.AddScoped<IShippingProvider>(sp =>
                 new HybridShippingProvider(
                     sp.GetRequiredService<FlatRateShippingProvider>(),
-                    new ShippoShippingProvider(
-                        sp.GetRequiredService<IHttpClientFactory>().CreateClient("ShippoClient"),
-                        shippoApiKey),
+                    new BostaShippingProvider(
+                        sp.GetRequiredService<IHttpClientFactory>().CreateClient("BostaClient"),
+                        bostaApiKey),
                     sp.GetService<ILogger<HybridShippingProvider>>()));
         }
         else

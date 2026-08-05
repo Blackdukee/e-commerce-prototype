@@ -1,5 +1,7 @@
+using System.Net;
 using FluentAssertions;
 using Moq;
+using Moq.Protected;
 using Vendor.Domain.Interfaces.Adapters;
 using Vendor.Domain.ValueObjects;
 using Vendor.Infrastructure.Shipping;
@@ -9,45 +11,43 @@ namespace Vendor.Infrastructure.Tests.Shipping;
 
 public class HybridShippingProviderTests
 {
-    private static readonly Address Origin = new("123 Main St", "New York", "NY", "10001", "US");
-    private static readonly Address Dest = new("456 Oak Ave", "Los Angeles", "CA", "90001", "US");
+    private static readonly Address Origin = new("123 Main St", "Cairo", "Cairo", "11511", "EG");
+    private static readonly Address Dest = new("456 Tahrir", "Cairo", "Cairo", "11511", "EG");
 
     [Fact]
-    public async Task WhenShippoNotConfigured_UsesFlatRate()
+    public async Task WhenBostaNotConfigured_UsesFlatRate()
     {
-        var hybrid = new HybridShippingProvider(new FlatRateShippingProvider(), shippoProvider: null);
+        var hybrid = new HybridShippingProvider(new FlatRateShippingProvider(), bostaProvider: null);
         var rates = await hybrid.GetRatesAsync(Origin, Dest, new Weight(0.5m, WeightUnit.Kg), new Dimensions(10m, 10m, 10m, DimensionUnit.Cm));
         rates.Should().HaveCount(1);
         rates[0].ServiceCode.Should().Be("FLAT");
     }
 
     [Fact]
-    public async Task WhenShippoConfigured_DelegatesToShippo()
+    public async Task WhenBostaConfigured_UsesBostaRates()
     {
-        IReadOnlyList<ShippingRate> shippoRates =
-            [new ShippingRate("USPS_P", "USPS Priority", new Money(7.50m, "USD"), TimeSpan.FromDays(2))];
-        var mockShippo = new Mock<IShippingProvider>();
-        mockShippo.Setup(s => s.GetRatesAsync(
-                It.IsAny<Address>(), It.IsAny<Address>(),
-                It.IsAny<Weight>(), It.IsAny<Dimensions>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(shippoRates);
+        var mockBosta = new Mock<IShippingProvider>();
+        IReadOnlyList<ShippingRate> bostaRates = [new ShippingRate("BOSTA_STD", "Bosta Standard", new Money(50m, "EGP"), TimeSpan.FromDays(1))];
 
-        var hybrid = new HybridShippingProvider(new FlatRateShippingProvider(), mockShippo.Object);
+        mockBosta
+            .Setup(s => s.GetRatesAsync(It.IsAny<Address>(), It.IsAny<Address>(), It.IsAny<Weight>(), It.IsAny<Dimensions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(bostaRates);
+
+        var hybrid = new HybridShippingProvider(new FlatRateShippingProvider(), mockBosta.Object);
         var rates = await hybrid.GetRatesAsync(Origin, Dest, new Weight(0.5m, WeightUnit.Kg), new Dimensions(10m, 10m, 10m, DimensionUnit.Cm));
 
-        rates[0].ServiceCode.Should().Be("USPS_P");
+        rates[0].ServiceCode.Should().Be("BOSTA_STD");
     }
 
     [Fact]
-    public async Task WhenShippoThrows_FallsBackToFlatRate()
+    public async Task WhenBostaFails_FallsBackToFlatRate()
     {
-        var mockShippo = new Mock<IShippingProvider>();
-        mockShippo.Setup(s => s.GetRatesAsync(
-                It.IsAny<Address>(), It.IsAny<Address>(),
-                It.IsAny<Weight>(), It.IsAny<Dimensions>(), It.IsAny<CancellationToken>()))
+        var mockBosta = new Mock<IShippingProvider>();
+        mockBosta
+            .Setup(s => s.GetRatesAsync(It.IsAny<Address>(), It.IsAny<Address>(), It.IsAny<Weight>(), It.IsAny<Dimensions>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new HttpRequestException("Network error"));
 
-        var hybrid = new HybridShippingProvider(new FlatRateShippingProvider(), mockShippo.Object);
+        var hybrid = new HybridShippingProvider(new FlatRateShippingProvider(), mockBosta.Object);
         var rates = await hybrid.GetRatesAsync(Origin, Dest, new Weight(0.5m, WeightUnit.Kg), new Dimensions(10m, 10m, 10m, DimensionUnit.Cm));
 
         rates[0].ServiceCode.Should().Be("FLAT");
