@@ -63,6 +63,10 @@ app.UseResponseCompression();
 // Stage 6: CORS
 app.UseCors("VendorCorsPolicy");
 
+// Enable Static Files (Storefront & Mission Control UI)
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // Stage 7: Rate Limiting
 app.UseRateLimiter();
 

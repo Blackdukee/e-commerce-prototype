@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ACME Store — High-Performance E-Commerce & Mission Control</title>
+  <meta name="description" content="ACME Vendor Platform — Outbox-driven multi-vendor e-commerce platform with real-time telemetry, Bosta Egyptian shipping, and ELK stack integration.">
+  
+  <!-- Modern Typography (Outfit, Inter, JetBrains Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    /* ==========================================================================
+       DESIGN SYSTEM TOKENS & BASE STYLES
+       ========================================================================== */
+    :root {
+      --bg-deep: #0B0F19;
+      --surface-card: #111827;
+      --surface-glass: rgba(17, 24, 39, 0.75);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(59, 130, 246, 0.3);
+      
+      --accent-primary: #3B82F6;
+      --accent-hover: #2563EB;
+      --accent-amber: #F59E0B;
+      --accent-emerald: #10B981;
+      --accent-rose: #F43F5E;
+      
+      --text-main: #F9FAFB;
+      --text-muted: #9CA3AF;
+      --text-dim: #6B7280;
+      
+      --font-display: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-deep);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      line-height: 1.6;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(245, 158, 11, 0.08) 0%, transparent 40%);
+    }
+
+    /* ==========================================================================
+       HEADER & LIVE TELEMETRY TICKER (SIGNATURE ELEMENT)
+       ========================================================================== */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--surface-glass);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0.75rem 2rem;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--text-main);
+    }
+
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-amber));
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.2rem;
+      box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+    }
+
+    .brand-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-tag {
+      font-size: 0.7rem;
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent-primary);
+      padding: 0.15rem 0.5rem;
+      border-radius: 99px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      font-family: var(--font-mono);
+    }
+
+    /* Telemetry Pulse Bar */
+    .telemetry-bar {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      background: rgba(0, 0, 0, 0.4);
+      padding: 0.4rem 1rem;
+      border-radius: 99px;
+      border: 1px solid var(--border-subtle);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+
+    .metric-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    /* View Switcher Tabs */
+    .tab-switcher {
+      display: flex;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 0.25rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.4rem 1rem;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn.active {
+      background: var(--accent-primary);
+      color: white;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+    }
+
+    /* ==========================================================================
+       HERO THESIS SECTION
+       ========================================================================== */
+    .hero {
+      max-width: 1400px;
+      margin: 2.5rem auto 1.5rem;
+      padding: 0 2rem;
+    }
+
+    .hero-card {
+      background: linear-gradient(135deg, rgba(17, 24, 39, 0.9), rgba(15, 23, 42, 0.7));
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 2.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-amber), var(--accent-emerald));
+    }
+
+    .hero-eyebrow {
+      font-family: var(--font-mono);
+      color: var(--accent-amber);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5rem;
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 1rem;
+    }
+
+    .hero-subtitle {
+      color: var(--text-muted);
+      max-width: 750px;
+      font-size: 1.05rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .stat-card {
+      background: rgba(0, 0, 0, 0.25);
+      padding: 1rem 1.25rem;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .stat-val {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* ==========================================================================
+       MAIN CONTENT VIEWS
+       ========================================================================== */
+    .content-container {
+      max-width: 1400px;
+      margin: 0 auto 4rem;
+      padding: 0 2rem;
+    }
+
+    .view-panel {
+      display: none;
+    }
+
+    .view-panel.active {
+      display: block;
+    }
+
+    /* Storefront Product Grid */
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .product-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .product-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--border-glow);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .product-thumb {
+      height: 180px;
+      background: linear-gradient(135deg, #1E293B, #0F172A);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      position: relative;
+    }
+
+    .product-badge {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--accent-emerald);
+      border: 1px solid var(--accent-emerald);
+      padding: 0.2rem 0.5rem;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+    }
+
+    .product-body {
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+    }
+
+    .product-title {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .product-desc {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      flex-grow: 1;
+    }
+
+    .product-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .product-price {
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--accent-amber);
+    }
+
+    .btn-add {
+      background: var(--accent-primary);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .btn-add:hover {
+      background: var(--accent-hover);
+    }
+
+    /* Telemetry Control Dashboard */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 992px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .telemetry-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .card-title {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .log-stream {
+      background: #070A10;
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      max-height: 380px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .log-entry {
+      display: flex;
+      gap: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      padding-bottom: 0.3rem;
+    }
+
+    .log-time { color: var(--text-dim); }
+    .log-tag-info { color: var(--accent-primary); }
+    .log-tag-success { color: var(--accent-emerald); }
+    .log-tag-warn { color: var(--accent-amber); }
+    .log-msg { color: var(--text-main); }
+
+    /* Egyptian Bosta Calculator */
+    .calc-box {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .form-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .form-select, .form-input {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-main);
+      padding: 0.6rem 0.8rem;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+    }
+
+    .form-select:focus, .form-input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+
+    .calc-result {
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .result-total {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: var(--accent-amber);
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 0.4rem;
+      margin-top: 0.4rem;
+    }
+
+    footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header & Live Telemetry Ticker -->
+  <header>
+    <div class="nav-container">
+      <a href="/" class="brand">
+        <div class="brand-logo">A</div>
+        <div>
+          <span class="brand-title">ACME STORE</span>
+          <span class="brand-tag">v1.0 .NET 9</span>
+        </div>
+      </a>
+
+      <!-- Telemetry Pulse Bar (Signature Element) -->
+      <div class="telemetry-bar">
+        <div class="metric-item">
+          <div class="status-dot"></div>
+          <span>API: Healthy</span>
+        </div>
+        <div class="metric-item">
+          <span style="color: var(--text-dim);">Latency:</span>
+          <span style="color: var(--accent-emerald);" id="latency-val">12ms</span>
+        </div>
+        <div class="metric-item">
+          <span style="color: var(--text-dim);">Outbox Queue:</span>
+          <span style="color: var(--accent-amber);" id="outbox-val">0 pending</span>
+        </div>
+        <div class="metric-item">
+          <span style="color: var(--text-dim);">Tax:</span>
+          <span>14% VAT (EGP)</span>
+        </div>
+      </div>
+
+      <!-- Tab Switcher -->
+      <div class="tab-switcher">
+        <button class="tab-btn active" onclick="switchTab('storefront')">🛍️ Storefront</button>
+        <button class="tab-btn" onclick="switchTab('telemetry')">📡 Mission Control</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Thesis Section -->
+  <section class="hero">
+    <div class="hero-card">
+      <div class="hero-eyebrow">Enterprise E-Commerce Engine</div>
+      <h1 class="hero-title">Outbox-Driven Architecture with Real-Time Telemetry</h1>
+      <p class="hero-subtitle">
+        Powered by ASP.NET Core 9 Clean Architecture, Elastic Common Schema (Serilog), Redis Caching, and Bosta Egyptian Logistics Integration.
+      </p>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-val" id="stat-tests">243 / 243</div>
+          <div class="stat-label">Tests Passing (100%)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">EGP (EGP)</div>
+          <div class="stat-label">Market Currency</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">Bosta / 14% VAT</div>
+          <div class="stat-label">Shipping & Tax Strategy</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val">Elastic 8.13</div>
+          <div class="stat-label">Kibana Telemetry (56010)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content Views -->
+  <div class="content-container">
+    
+    <!-- View 1: Storefront Product Catalog -->
+    <div id="view-storefront" class="view-panel active">
+      <h2 style="font-family: var(--font-display); font-size: 1.4rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+        Featured Product Catalog
+      </h2>
+
+      <div class="product-grid">
+        <!-- Product 1 -->
+        <div class="product-card">
+          <div class="product-thumb">
+            🎧
+            <div class="product-badge">In Stock</div>
+          </div>
+          <div class="product-body">
+            <div class="product-title">Noise-Cancelling Studio Pods Pro</div>
+            <div class="product-desc">High-fidelity active noise cancellation with 36-hour battery life and spatial audio.</div>
+            <div class="product-footer">
+              <div class="product-price">2,499.00 EGP</div>
+              <button class="btn-add" onclick="simulateOrder('Studio Pods Pro', 2499)">Add to Cart</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Product 2 -->
+        <div class="product-card">
+          <div class="product-thumb">
+            ⌨️
+            <div class="product-badge">Popular</div>
+          </div>
+          <div class="product-body">
+            <div class="product-title">Custom Mechanical Keyboard RGB</div>
+            <div class="product-desc">Hot-swappable tactile switches, anodized aluminum chassis, and PBT keycaps.</div>
+            <div class="product-footer">
+              <div class="product-price">3,850.00 EGP</div>
+              <button class="btn-add" onclick="simulateOrder('Mechanical Keyboard', 3850)">Add to Cart</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Product 3 -->
+        <div class="product-card">
+          <div class="product-thumb">
+            ⌚
+            <div class="product-badge">New Release</div>
+          </div>
+          <div class="product-body">
+            <div class="product-title">Ultra-Fitness Smartwatch V2</div>
+            <div class="product-desc">Titanium case, dual-frequency GPS, heart-rate tracking, and 100m water resistance.</div>
+            <div class="product-footer">
+              <div class="product-price">4,100.00 EGP</div>
+              <button class="btn-add" onclick="simulateOrder('Fitness Smartwatch', 4100)">Add to Cart</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Product 4 -->
+        <div class="product-card">
+          <div class="product-thumb">
+            🎒
+            <div class="product-badge">In Stock</div>
+          </div>
+          <div class="product-body">
+            <div class="product-title">Waterproof Tech Commuter Pack</div>
+            <div class="product-desc">Dedicated 16" laptop sleeve, RFID-blocking pocket, and ergonomic back panel.</div>
+            <div class="product-footer">
+              <div class="product-price">1,250.00 EGP</div>
+              <button class="btn-add" onclick="simulateOrder('Commuter Pack', 1250)">Add to Cart</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View 2: Mission Control & Telemetry -->
+    <div id="view-telemetry" class="view-panel">
+      <div class="dashboard-grid">
+        
+        <!-- Live Outbox Log Stream -->
+        <div class="telemetry-card">
+          <div class="card-header">
+            <div class="card-title">📡 Live Event Stream & Outbox Dispatcher</div>
+            <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent-emerald);">Serilog ECS Streamed</span>
+          </div>
+
+          <div class="log-stream" id="log-stream">
+            <div class="log-entry">
+              <span class="log-time">[16:34:01]</span>
+              <span class="log-tag-info">INFO</span>
+              <span class="log-msg">Vendor.Api started cleanly on port 5192.</span>
+            </div>
+            <div class="log-entry">
+              <span class="log-time">[16:34:05]</span>
+              <span class="log-tag-success">HEALTH</span>
+              <span class="log-msg">SQL Server (localhost:14330) and Redis (localhost:6379) healthy.</span>
+            </div>
+            <div class="log-entry">
+              <span class="log-time">[16:34:10]</span>
+              <span class="log-tag-info">SERILOG</span>
+              <span class="log-msg">ECS logs dispatched to Elasticsearch (.ds-logs-dotnet-default-*).</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Egyptian Bosta Logistics Calculator -->
+        <div class="telemetry-card">
+          <div class="card-header">
+            <div class="card-title">🚚 Bosta Egypt Shipping & Tax</div>
+          </div>
+
+          <div class="calc-box">
+            <div class="form-group">
+              <label class="form-label">Destination Governorate</label>
+              <select class="form-select" id="gov-select" onchange="calculateShipping()">
+                <option value="50">Cairo / Giza (50 EGP)</option>
+                <option value="75">Alexandria (75 EGP)</option>
+                <option value="95">Delta & Canal Cities (95 EGP)</option>
+                <option value="120">Upper Egypt / Red Sea (120 EGP)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Cart Subtotal (EGP)</label>
+              <input type="number" class="form-input" id="subtotal-input" value="2499" oninput="calculateShipping()">
+            </div>
+
+            <div class="calc-result">
+              <div class="result-row">
+                <span>Subtotal:</span>
+                <span id="res-subtotal">2,499.00 EGP</span>
+              </div>
+              <div class="result-row">
+                <span>Bosta Shipping:</span>
+                <span id="res-shipping">50.00 EGP</span>
+              </div>
+              <div class="result-row">
+                <span>VAT (14% Flat):</span>
+                <span id="res-tax">349.86 EGP</span>
+              </div>
+              <div class="result-row result-total">
+                <span>Total Amount:</span>
+                <span id="res-total">2,898.86 EGP</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <p>ACME Vendor Platform &copy; 2026 — Clean Architecture .NET 9 Prototype | Egyptian E-Commerce Stack</p>
+  </footer>
+
+  <script>
+    // Tab Switcher Logic
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.view-panel').forEach(panel => panel.classList.remove('active'));
+
+      if (tabId === 'storefront') {
+        document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+        document.getElementById('view-storefront').classList.add('active');
+      } else {
+        document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+        document.getElementById('view-telemetry').classList.add('active');
+      }
+    }
+
+    // Bosta Egyptian Shipping & Tax Calculator
+    function calculateShipping() {
+      const shipping = parseFloat(document.getElementById('gov-select').value) || 0;
+      const subtotal = parseFloat(document.getElementById('subtotal-input').value) || 0;
+      const vat = subtotal * 0.14;
+      const total = subtotal + shipping + vat;
+
+      document.getElementById('res-subtotal').innerText = subtotal.toLocaleString('en-US', {minimumFractionDigits: 2}) + ' EGP';
+      document.getElementById('res-shipping').innerText = shipping.toLocaleString('en-US', {minimumFractionDigits: 2}) + ' EGP';
+      document.getElementById('res-tax').innerText = vat.toLocaleString('en-US', {minimumFractionDigits: 2}) + ' EGP';
+      document.getElementById('res-total').innerText = total.toLocaleString('en-US', {minimumFractionDigits: 2}) + ' EGP';
+    }
+
+    // Interactive Order Simulator
+    function simulateOrder(name, price) {
+      document.getElementById('subtotal-input').value = price;
+      calculateShipping();
+      switchTab('telemetry');
+
+      const logStream = document.getElementById('log-stream');
+      const now = new Date().toLocaleTimeString();
+
+      const newLog = document.createElement('div');
+      newLog.className = 'log-entry';
+      newLog.innerHTML = `
+        <span class="log-time">[${now}]</span>
+        <span class="log-tag-success">OUTBOX</span>
+        <span class="log-msg">OrderPlacedEvent created for "${name}" (${price} EGP). Outbox message persisted.</span>
+      `;
+      logStream.prepend(newLog);
+
+      // Pulse outbox counter
+      const outboxEl = document.getElementById('outbox-val');
+      outboxEl.innerText = '1 queued (processing)';
+      setTimeout(() => {
+        outboxEl.innerText = '0 pending';
+      }, 2000);
+    }
+
+    // Initialize Calculator on load
+    calculateShipping();
+  </script>
+</body>
+</html>
