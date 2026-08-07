@@ -31,7 +31,7 @@ public class VendorApiFactory : WebApplicationFactory<Program>
             // do not break integration test signature verification.
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = "Data Source=(localdb)\\MSSQLLocalDB;Initial Catalog=VendorDbHangfireTest;Integrated Security=True;Encrypt=False;TrustServerCertificate=True;",
+                ["ConnectionStrings:DefaultConnection"] = "Server=localhost,14330;Database=VendorDb;User Id=sa;Password=YourStr0ng!Pass;TrustServerCertificate=True;",
                 ["ConnectionStrings:Redis"]             = "",
                 ["Stripe:WebhookSecret"]                = "whsec_test_secret_12345",
                 ["Paymob:HmacSecret"]                   = "paymob_hmac_secret_test",
