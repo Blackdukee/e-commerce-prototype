@@ -36,6 +36,9 @@ public class VendorApiFactory : WebApplicationFactory<Program>
                 ["Stripe:WebhookSecret"]                = "whsec_test_secret_12345",
                 ["Paymob:HmacSecret"]                   = "paymob_hmac_secret_test",
                 ["Paypal:WebhookId"]                    = "paypal_wh_id_test",
+                ["AWS:AccessKey"]                       = "AKIA_TEST_KEY_12345",
+                ["AWS:SecretKey"]                       = "aws_test_secret_key_1234567890",
+                ["AWS:S3:BucketName"]                   = "e-commerce-test-bucket",
             });
         });
 

@@ -10,8 +10,8 @@
         "tokenLifetimeMinutes": 60,
         "refreshTokenLifetimeDays": 30,
         "jwtSecret": "ref:env:JWT_SECRET",
-        "googleClientId": "REDACTED_GOOGLE_CLIENT_ID",
-        "googleClientSecret": "ref:env:REDACTED_GOOGLE_CLIENT_SECRET",
+        "googleClientId": "ref:env:GOOGLE_CLIENT_ID",
+        "googleClientSecret": "ref:env:GOOGLE_CLIENT_SECRET",
         "passwordMinLength": 8,
         "passwordRequireUppercase": true,
         "passwordRequireDigit": true,
@@ -27,8 +27,8 @@
         "senderName": "Vendor Store",
         "smtpHost": "sandbox.smtp.mailtrap.io",
         "smtpPort": 2525,
-        "smtpUsername": "74e279fce2c3bb",
-        "smtpPassword": "ref:env:8c6df33d3bb365"
+        "smtpUsername": "ref:env:SMTP_USERNAME",
+        "smtpPassword": "ref:env:SMTP_PASSWORD"
       },
       "analytics": {
         "provider": "ga4",
@@ -76,8 +76,8 @@
           "enabled": true,
           "isDefault": true,
           "credentials": {
-            "publicKey": "pk_test_51R0nWXBLtTuFPq2ghYUwqXJZQ2bqcWcxKnqqMEAxVdQ2eGviVk1nQXxG6SECgP7I0N4WNvXqRLgmdaasFpn3IoQX00CjkXPYhs",
-            "secretKey": "ref:env:REDACTED_STRIPE_SECRET_KEY"
+            "publicKey": "ref:env:STRIPE_PUBLIC_KEY",
+            "secretKey": "ref:env:STRIPE_SECRET_KEY"
           },
           "supportedMethods": [
             "card",
@@ -90,18 +90,18 @@
           "providerName": "paymob",
           "enabled": true,
           "credentials": {
-            "apiKey": "ref:env:REDACTED_PAYMOB_API_KEY",
-            "integrationId": "5592983"
+            "apiKey": "ref:env:PAYMOB_API_KEY",
+            "integrationId": "ref:env:PAYMOB_INTEGRATION_ID"
           }
         },
         {
           "providerName": "paypal",
           "enabled": true,
           "credentials": {
-            "clientId": "ref:env:REDACTED_PAYPAL_CLIENT_ID",
-            "secret": "ref:env:REDACTED_PAYPAL_SECRET"
+            "clientId": "ref:env:PAYPAL_CLIENT_ID",
+            "secret": "ref:env:PAYPAL_SECRET"
           },
-          "webhookId": "8M412019LX902760D"
+          "webhookId": "ref:env:PAYPAL_WEBHOOK_ID"
         }
       ],
       "shipping": [
