@@ -63,6 +63,8 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - XPACK_SECURITY_ENABLED=false
       - XPACK_SYNTHETICS_ENABLED=false
+      - XPACK_FLEET_ENABLED=false
+      - XPACK_SECURITYSOLUTION_ENABLED=false
     depends_on:
       elasticsearch:
         condition: service_healthy
