@@ -58,9 +58,11 @@ services:
     container_name: vendor-kibana
     restart: unless-stopped
     ports:
-      - "5601:5601"
+      - "56010:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - XPACK_SECURITY_ENABLED=false
+      - XPACK_SYNTHETICS_ENABLED=false
     depends_on:
       elasticsearch:
         condition: service_healthy
