@@ -72,6 +72,8 @@ public record TrackingResponseDto(string TrackingNumber, string Status, string? 
 public record SubmitReturnRequest(Guid OrderId, ReturnItemInputDto[] Items, string Type, string Reason);
 public record ReturnItemInputDto(Guid OrderLineId, int Quantity, Guid? ExchangeVariantId);
 public record RejectReturnRequest(string Reason);
+public record ApproveReturnRequestDto(string? Resolution);
+public record CompleteExchangeRequest(Guid ReplacementVariantId, int ReplacementQuantity);
 
 public record ReturnRequestDto(
     Guid Id,

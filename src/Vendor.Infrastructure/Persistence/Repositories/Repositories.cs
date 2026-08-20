@@ -19,20 +19,48 @@ public class ProductRepository(VendorDbContext context) : IProductRepository
         => await context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Id == id, ct);
 
     public async Task<Product?> GetBySlugAsync(Slug slug, CancellationToken ct = default)
-        => await context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Slug.Value == slug.Value, ct);
+        => await context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Slug == slug, ct);
 
     public async Task<Product?> GetByVariantIdAsync(ProductVariantId variantId, CancellationToken ct = default)
         => await context.Products.Include(p => p.Variants).FirstOrDefaultAsync(p => p.Variants.Any(v => v.Id == variantId), ct);
 
-    public async Task<IReadOnlyList<Product>> SearchAsync(string? searchTerm, int pageIndex, int pageSize, CancellationToken ct = default)
+    public async Task<(IReadOnlyList<Product> Items, int TotalCount)> SearchAsync(
+        string? searchTerm,
+        string? category = null,
+        decimal? minPrice = null,
+        decimal? maxPrice = null,
+        int pageIndex = 0,
+        int pageSize = 20,
+        CancellationToken ct = default)
     {
         var query = context.Products.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
-            var term = searchTerm.Trim().ToLowerInvariant();
-            query = query.Where(p => p.Name.ToLower().Contains(term) || p.Slug.Value.ToLower().Contains(term));
+            var term = searchTerm.Trim();
+            var pattern = $"%{term}%";
+            query = query.Where(p => EF.Functions.Like(p.Name, pattern) || EF.Functions.Like((string)(object)p.Slug, pattern));
         }
-        return await query.Skip(pageIndex * pageSize).Take(pageSize).ToListAsync(ct);
+
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            var cat = category.Trim();
+            var catPattern = $"%{cat}%";
+            query = query.Where(p => (p.Category != null && p.Category == cat) || EF.Functions.Like((string)(object)p.Category!, catPattern));
+        }
+
+        if (minPrice.HasValue)
+        {
+            query = query.Where(p => p.BasePrice.Amount >= minPrice.Value);
+        }
+
+        if (maxPrice.HasValue)
+        {
+            query = query.Where(p => p.BasePrice.Amount <= maxPrice.Value);
+        }
+
+        var totalCount = await query.CountAsync(ct);
+        var items = await query.Skip(pageIndex * pageSize).Take(pageSize).ToListAsync(ct);
+        return (items, totalCount);
     }
 
     public async Task<IReadOnlyList<ProductVariant>> GetVariantsByIdsAsync(IEnumerable<ProductVariantId> variantIds, CancellationToken ct = default)
@@ -293,6 +321,28 @@ public class ReturnRequestRepository(VendorDbContext context) : IReturnRequestRe
 
     public async Task<IReadOnlyList<ReturnRequest>> GetByOrderIdAsync(OrderId orderId, CancellationToken ct = default)
         => await context.ReturnRequests.Where(r => r.OrderId == orderId).ToListAsync(ct);
+
+    public async Task<(IReadOnlyList<ReturnRequest> Items, int TotalCount)> GetPagedAsync(
+        ReturnRequestStatus? status,
+        int pageIndex,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = context.ReturnRequests.AsNoTracking().AsQueryable();
+        if (status.HasValue)
+        {
+            query = query.Where(r => r.Status == status.Value);
+        }
+
+        var totalCount = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(r => r.CreatedAtUtc)
+            .Skip(pageIndex * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, totalCount);
+    }
 
     public async Task AddAsync(ReturnRequest returnRequest, CancellationToken ct = default)
         => await context.ReturnRequests.AddAsync(returnRequest, ct);

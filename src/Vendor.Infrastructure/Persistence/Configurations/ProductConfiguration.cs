@@ -21,6 +21,9 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasMaxLength(256);
 
         builder.Property(p => p.BasePrice).HasConversion<MoneyConverter>();
+        builder.Property(p => p.Category).HasMaxLength(128);
+        builder.PrimitiveCollection(p => p.Categories);
+        builder.PrimitiveCollection(p => p.Tags);
         builder.PrimitiveCollection(p => p.Images);
         builder.HasIndex(p => p.Slug).IsUnique();
 

@@ -8,4 +8,7 @@ public record ProductSearchDoc(
     decimal BasePrice,
     string Currency,
     string Status,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    string? Category = null,
+    IReadOnlyList<string>? Categories = null,
+    IReadOnlyList<string>? Tags = null);

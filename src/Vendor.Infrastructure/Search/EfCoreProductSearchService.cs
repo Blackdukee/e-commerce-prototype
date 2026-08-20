@@ -30,6 +30,13 @@ public class EfCoreProductSearchService(VendorDbContext dbContext) : IProductSea
                 EF.Functions.Like(p.Description ?? "", pattern));
         }
 
+        if (!string.IsNullOrWhiteSpace(filters.Category))
+        {
+            var cat = filters.Category.Trim();
+            var catPattern = $"%{cat}%";
+            q = q.Where(p => (p.Category != null && p.Category == cat) || EF.Functions.Like((string)(object)p.Category!, catPattern));
+        }
+
         if (filters.MinPrice.HasValue)
             q = q.Where(p => p.BasePrice.Amount >= filters.MinPrice.Value);
 
@@ -51,7 +58,10 @@ public class EfCoreProductSearchService(VendorDbContext dbContext) : IProductSea
                 p.BasePrice.Amount,
                 p.BasePrice.Currency,
                 p.Status.ToString(),
-                p.CreatedAtUtc))
+                p.CreatedAtUtc,
+                p.Category,
+                p.Categories.ToList(),
+                p.Tags.ToList()))
             .ToListAsync(ct);
 
         return new PagedResult<ProductSearchDoc>(items, totalCount, page, pageSize);

@@ -28,27 +28,33 @@ public record AddCartItemCommand(Guid CartId, Guid VariantId, int Quantity, deci
 public record UpdateCartItemQuantityCommand(Guid CartId, Guid VariantId, int Quantity) : ICommand<Result<CartDto>>;
 public record RemoveCartItemCommand(Guid CartId, Guid VariantId) : ICommand<Result<CartDto>>, IIdempotentRequest<Result<CartDto>>
 {
-    public string IdempotencyKey => $"REM-CART-ITEM-{CartId}-{VariantId}";
+    public string IdempotencyKey => ToGuidString($"REM-CART-ITEM-{CartId}-{VariantId}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 public record ApplyCartDiscountCodeCommand(Guid CartId, string DiscountCode) : ICommand<Result<CartDto>>, IIdempotentRequest<Result<CartDto>>
 {
-    public string IdempotencyKey => $"APPLY-DISC-{CartId}-{DiscountCode}";
+    public string IdempotencyKey => ToGuidString($"APPLY-DISC-{CartId}-{DiscountCode}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 public record RemoveCartDiscountCodeCommand(Guid CartId) : ICommand<Result<CartDto>>, IIdempotentRequest<Result<CartDto>>
 {
-    public string IdempotencyKey => $"REM-DISC-{CartId}";
+    public string IdempotencyKey => ToGuidString($"REM-DISC-{CartId}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 public record ClearCartCommand(Guid CartId) : ICommand<Result>, IIdempotentRequest<Result>
 {
-    public string IdempotencyKey => $"CLEAR-CART-{CartId}";
+    public string IdempotencyKey => ToGuidString($"CLEAR-CART-{CartId}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 public record MergeGuestCartCommand(Guid GuestCartId, Guid CustomerCartId) : ICommand<Result<CartDto>>, IIdempotentRequest<Result<CartDto>>
 {
-    public string IdempotencyKey => $"MERGE-CART-{GuestCartId}-{CustomerCartId}";
+    public string IdempotencyKey => ToGuidString($"MERGE-CART-{GuestCartId}-{CustomerCartId}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 public record ProcessCartAbandonmentCommand(int TimeoutHours) : ICommand<Result<int>>, IIdempotentRequest<Result<int>>
 {
-    public string IdempotencyKey => $"ABANDON-RUN-{DateTime.UtcNow:yyyyMMddHH}";
+    public string IdempotencyKey => ToGuidString($"ABANDON-RUN-{DateTime.UtcNow:yyyyMMddHH}");
+    private static string ToGuidString(string input) => new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(input))).ToString();
 }
 
 public record GetCartByIdQuery(Guid CartId) : IQuery<Result<CartDto>>;

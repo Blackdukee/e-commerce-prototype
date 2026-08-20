@@ -1,4 +1,5 @@
 using Vendor.Application.Common.Messaging;
+using Vendor.Application.Common.Models;
 using Vendor.Application.Common.Results;
 using Vendor.Application.Modules.Orders.Dtos;
 using Vendor.Domain.Aggregates.Customer;
@@ -28,8 +29,6 @@ public record CustomerAuditLogDto(
     string DetailsJson,
     Guid PerformedByCustomerId,
     DateTime TimestampUtc);
-
-public record PagedResult<T>(IReadOnlyList<T> Items, int TotalCount, int PageIndex, int PageSize);
 
 public record GetAdminCustomersQuery(
     string? Email = null,

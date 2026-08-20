@@ -39,6 +39,11 @@ public class ElasticsearchProductSearchService : IProductSearchService
 
                     musts.Add(m => m.Term(t => t.Field("status").Value(filters.Status ?? "Active")));
 
+                    if (!string.IsNullOrWhiteSpace(filters.Category))
+                    {
+                        musts.Add(m => m.Term(t => t.Field("category").Value(filters.Category)));
+                    }
+
                     if (!string.IsNullOrWhiteSpace(query))
                     {
                         var queryText = query;

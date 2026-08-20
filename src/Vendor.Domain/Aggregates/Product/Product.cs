@@ -17,10 +17,13 @@ public class Product : AggregateRoot<ProductId>
 {
     private readonly List<ProductVariant> _variants = [];
     private readonly List<string> _images = [];
+    private readonly List<string> _categories = [];
+    private readonly List<string> _tags = [];
 
     public string Name { get; private set; }
     public Slug Slug { get; private set; }
     public string? Description { get; private set; }
+    public string? Category { get; private set; }
     public Money BasePrice { get; private set; }
     public ProductStatus Status { get; private set; }
     public int LowStockThreshold { get; private set; }
@@ -28,6 +31,8 @@ public class Product : AggregateRoot<ProductId>
 
     public IReadOnlyCollection<ProductVariant> Variants => _variants.AsReadOnly();
     public IReadOnlyCollection<string> Images => _images.AsReadOnly();
+    public IReadOnlyCollection<string> Categories => _categories.AsReadOnly();
+    public IReadOnlyCollection<string> Tags => _tags.AsReadOnly();
 
     private Product() : base(default!)
     {
@@ -41,7 +46,10 @@ public class Product : AggregateRoot<ProductId>
         Slug slug,
         Money basePrice,
         string? description = null,
-        int lowStockThreshold = 5) : base(id)
+        int lowStockThreshold = 5,
+        string? category = null,
+        IEnumerable<string>? categories = null,
+        IEnumerable<string>? tags = null) : base(id)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
 
@@ -54,12 +62,38 @@ public class Product : AggregateRoot<ProductId>
         Slug = slug;
         BasePrice = basePrice;
         Description = description?.Trim();
+        Category = category?.Trim();
         Status = ProductStatus.Draft;
         LowStockThreshold = Math.Max(0, lowStockThreshold);
         CreatedAtUtc = DateTime.UtcNow;
+
+        if (categories != null)
+        {
+            _categories.AddRange(categories.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct(StringComparer.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(Category) && _categories.Count > 0)
+            {
+                Category = _categories[0];
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(category))
+        {
+            _categories.Add(category.Trim());
+        }
+
+        if (tags != null)
+        {
+            _tags.AddRange(tags.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase));
+        }
     }
 
-    public void UpdateDetails(string name, Slug slug, Money basePrice, string? description = null)
+    public void UpdateDetails(
+        string name,
+        Slug slug,
+        Money basePrice,
+        string? description = null,
+        string? category = null,
+        IEnumerable<string>? categories = null,
+        IEnumerable<string>? tags = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
         if (basePrice.Amount < 0m)
@@ -71,6 +105,45 @@ public class Product : AggregateRoot<ProductId>
         Slug = slug;
         BasePrice = basePrice;
         Description = description?.Trim();
+        Category = category?.Trim();
+
+        if (categories != null)
+        {
+            _categories.Clear();
+            _categories.AddRange(categories.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct(StringComparer.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(Category) && _categories.Count > 0)
+            {
+                Category = _categories[0];
+            }
+        }
+
+        if (tags != null)
+        {
+            _tags.Clear();
+            _tags.AddRange(tags.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase));
+        }
+    }
+
+    public void SetCategories(IEnumerable<string> categories)
+    {
+        _categories.Clear();
+        if (categories != null)
+        {
+            _categories.AddRange(categories.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct(StringComparer.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(Category) && _categories.Count > 0)
+            {
+                Category = _categories[0];
+            }
+        }
+    }
+
+    public void SetTags(IEnumerable<string> tags)
+    {
+        _tags.Clear();
+        if (tags != null)
+        {
+            _tags.AddRange(tags.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).Distinct(StringComparer.OrdinalIgnoreCase));
+        }
     }
 
     public void AddVariant(ProductVariant variant)

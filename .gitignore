@@ -31,3 +31,7 @@ coverage/
 secrets.env
 !secrets.env.template
 
+# Internal Guides
+docs/JUNIOR_DEVELOPER_GUIDE.md
+
+

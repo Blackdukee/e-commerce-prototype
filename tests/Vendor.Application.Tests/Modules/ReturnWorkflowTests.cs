@@ -40,4 +40,67 @@ public class ReturnWorkflowTests
         result.Value.Status.Should().Be("Pending");
         await _returnRequestRepository.Received(1).AddAsync(Arg.Any<ReturnRequest>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task RejectReturnRequest_Pending_Succeeds()
+    {
+        var returnReq = new ReturnRequest(
+            ReturnRequestId.New(),
+            OrderId.New(),
+            CustomerId.New(),
+            "Changed mind",
+            [new ReturnItem(Guid.NewGuid(), ProductVariantId.New(), 1, "Wrong size")]);
+
+        _returnRequestRepository.GetByIdAsync(returnReq.Id, Arg.Any<CancellationToken>()).Returns(returnReq);
+
+        var handler = new RejectReturnRequestCommandHandler(_returnRequestRepository);
+        var command = new RejectReturnRequestCommand(returnReq.Id.Value, "Not eligible for return after 30 days");
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Status.Should().Be("Rejected");
+        await _returnRequestRepository.Received(1).UpdateAsync(returnReq, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetReturnById_Exists_ReturnsDto()
+    {
+        var returnReq = new ReturnRequest(
+            ReturnRequestId.New(),
+            OrderId.New(),
+            CustomerId.New(),
+            "Damaged",
+            [new ReturnItem(Guid.NewGuid(), ProductVariantId.New(), 1, "Cracked")]);
+
+        _returnRequestRepository.GetByIdAsync(returnReq.Id, Arg.Any<CancellationToken>()).Returns(returnReq);
+
+        var handler = new Vendor.Application.Modules.Returns.Queries.GetReturnByIdQueryHandler(_returnRequestRepository);
+        var result = await handler.Handle(new GetReturnByIdQuery(returnReq.Id.Value), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Id.Should().Be(returnReq.Id.Value);
+    }
+
+    [Fact]
+    public async Task GetAdminReturns_Paged_ReturnsPagedResult()
+    {
+        var returnReq = new ReturnRequest(
+            ReturnRequestId.New(),
+            OrderId.New(),
+            CustomerId.New(),
+            "Defective",
+            [new ReturnItem(Guid.NewGuid(), ProductVariantId.New(), 1, "Not working")]);
+
+        _returnRequestRepository.GetPagedAsync(null, 0, 10, Arg.Any<CancellationToken>())
+            .Returns(([returnReq], 1));
+
+        var handler = new Vendor.Application.Modules.Returns.Queries.GetAdminReturnsQueryHandler(_returnRequestRepository);
+        var result = await handler.Handle(new GetAdminReturnsQuery(null, 0, 10), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Items.Should().HaveCount(1);
+        result.Value.TotalCount.Should().Be(1);
+        result.Value.TotalPages.Should().Be(1);
+    }
 }

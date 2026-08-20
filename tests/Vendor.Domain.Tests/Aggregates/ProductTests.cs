@@ -77,4 +77,35 @@ public class ProductTests
         product.DomainEvents.Should().ContainSingle(e => e is ProductLowStockEvent)
             .Which.As<ProductLowStockEvent>().CurrentStock.Should().Be(2);
     }
+
+    [Fact]
+    public void Product_WithCategoriesAndTags_PopulatesCollectionsCorrectly()
+    {
+        var productId = ProductId.New();
+        var product = new Product(
+            productId,
+            "Pro Laptop",
+            new Slug("pro-laptop"),
+            new Money(1500m, "USD"),
+            description: "High performance",
+            category: "Computers",
+            categories: ["Electronics", "Computers", "Laptops"],
+            tags: ["portable", "fast", "pro"]);
+
+        product.Category.Should().Be("Computers");
+        product.Categories.Should().ContainInOrder("Electronics", "Computers", "Laptops");
+        product.Tags.Should().ContainInOrder("portable", "fast", "pro");
+
+        product.UpdateDetails(
+            "Pro Laptop 2",
+            new Slug("pro-laptop-2"),
+            new Money(1600m, "USD"),
+            category: "Ultrabooks",
+            categories: ["Laptops", "Ultrabooks"],
+            tags: ["lightweight"]);
+
+        product.Category.Should().Be("Ultrabooks");
+        product.Categories.Should().ContainInOrder("Laptops", "Ultrabooks");
+        product.Tags.Should().ContainSingle().Which.Should().Be("lightweight");
+    }
 }

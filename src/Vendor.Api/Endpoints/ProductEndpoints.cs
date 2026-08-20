@@ -15,11 +15,11 @@ public static class ProductEndpoints
         var publicProducts = group.MapGroup("/products")
             .WithTags("Products");
 
-        publicProducts.MapGet("/", async (int? page, int? pageSize, string? search, ISender mediator, CancellationToken ct) =>
+        publicProducts.MapGet("/", async (int? page, int? pageSize, string? search, string? category, decimal? minPrice, decimal? maxPrice, ISender mediator, CancellationToken ct) =>
         {
             var pIndex = (page ?? 1) - 1;
             var pSize = Math.Min(pageSize ?? 20, 100);
-            var result = await mediator.Send(new SearchProductsQuery(search, pIndex <= 0 ? 0 : pIndex, pSize <= 0 ? 20 : pSize), ct);
+            var result = await mediator.Send(new SearchProductsQuery(search, category, minPrice, maxPrice, pIndex <= 0 ? 0 : pIndex, pSize <= 0 ? 20 : pSize), ct);
             return result.ToHttpResult();
         });
 
@@ -29,7 +29,17 @@ public static class ProductEndpoints
             {
                 return Results.Forbid();
             }
-            var command = new CreateProductCommand(req.Name, req.Slug, req.BasePriceAmount, req.Currency, 3, req.Description);
+            var command = new CreateProductCommand(
+                req.Name,
+                req.Slug,
+                req.BasePriceAmount,
+                req.Currency,
+                3,
+                req.Description,
+                req.Categories?.FirstOrDefault(),
+                req.Categories?.ToList(),
+                req.Tags?.ToList(),
+                req.Images?.ToList());
             var result = await mediator.Send(command, ct);
             return result.ToCreatedHttpResult($"/api/v1/products/{result.Value?.Id}");
         })
@@ -53,14 +63,32 @@ public static class ProductEndpoints
 
         adminProducts.MapPost("/", async (CreateProductRequest req, ISender mediator, CancellationToken ct) =>
         {
-            var command = new CreateProductCommand(req.Name, req.Slug, req.BasePriceAmount, req.Currency, 3, req.Description);
+            var command = new CreateProductCommand(
+                req.Name,
+                req.Slug,
+                req.BasePriceAmount,
+                req.Currency,
+                3,
+                req.Description,
+                req.Categories?.FirstOrDefault(),
+                req.Categories?.ToList(),
+                req.Tags?.ToList(),
+                req.Images?.ToList());
             var result = await mediator.Send(command, ct);
             return result.ToCreatedHttpResult($"/api/v1/products/{result.Value?.Id}");
         });
 
         adminProducts.MapPut("/{id:guid}", async (Guid id, UpdateProductRequest req, ISender mediator, CancellationToken ct) =>
         {
-            var command = new UpdateProductCommand(id, req.Name ?? "", req.Slug ?? "", req.BasePriceAmount ?? 0m, req.Description);
+            var command = new UpdateProductCommand(
+                id,
+                req.Name ?? "",
+                req.Slug ?? "",
+                req.BasePriceAmount ?? 0m,
+                req.Description,
+                req.Categories?.FirstOrDefault(),
+                req.Categories?.ToList(),
+                req.Tags?.ToList());
             var result = await mediator.Send(command, ct);
             return result.ToHttpResult();
         });

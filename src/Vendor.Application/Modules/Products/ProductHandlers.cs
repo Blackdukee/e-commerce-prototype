@@ -1,5 +1,6 @@
 using MediatR;
 using Vendor.Application.Common.Messaging;
+using Vendor.Application.Common.Models;
 using Vendor.Application.Common.Results;
 using Vendor.Application.Interfaces;
 using Vendor.Domain.Aggregates.Product;
@@ -19,7 +20,11 @@ public record ProductDto(
     string Status,
     int LowStockThreshold,
     IReadOnlyList<ProductVariantDto> Variants,
-    IReadOnlyList<string> Images)
+    IReadOnlyList<string> Images,
+    string? Category = null,
+    IReadOnlyList<string>? Categories = null,
+    IReadOnlyList<string>? Tags = null,
+    string? Description = null)
 {
     public static ProductDto FromDomain(Product product) => new(
         product.Id.Value,
@@ -30,11 +35,34 @@ public record ProductDto(
         product.Status.ToString(),
         product.LowStockThreshold,
         product.Variants.Select(v => new ProductVariantDto(v.Id.Value, v.Sku, v.PriceAdjustment.Amount, v.StockQuantity, v.Weight.Value, v.Weight.Unit.ToString())).ToList(),
-        product.Images.ToList());
+        product.Images.ToList(),
+        product.Category,
+        product.Categories.ToList(),
+        product.Tags.ToList(),
+        product.Description);
 }
 
-public record CreateProductCommand(string Name, string Slug, decimal BasePrice, string Currency, int LowStockThreshold = 3, string? Description = null) : ICommand<Result<ProductDto>>;
-public record UpdateProductCommand(Guid ProductId, string Name, string Slug, decimal BasePrice, string? Description = null) : ICommand<Result<ProductDto>>;
+public record CreateProductCommand(
+    string Name,
+    string Slug,
+    decimal BasePrice,
+    string Currency,
+    int LowStockThreshold = 3,
+    string? Description = null,
+    string? Category = null,
+    List<string>? Categories = null,
+    List<string>? Tags = null,
+    List<string>? Images = null) : ICommand<Result<ProductDto>>;
+
+public record UpdateProductCommand(
+    Guid ProductId,
+    string Name,
+    string Slug,
+    decimal BasePrice,
+    string? Description = null,
+    string? Category = null,
+    List<string>? Categories = null,
+    List<string>? Tags = null) : ICommand<Result<ProductDto>>;
 public record ActivateProductCommand(Guid ProductId) : ICommand<Result>, IIdempotentRequest<Result>
 {
     public string IdempotencyKey => ToGuidString($"ACTIVATE-{ProductId}");
@@ -65,7 +93,13 @@ public record RemoveProductImageCommand(Guid ProductId, string ImageUrl) : IComm
 
 public record GetProductByIdQuery(Guid ProductId) : IQuery<Result<ProductDto>>;
 public record GetProductBySlugQuery(string Slug) : IQuery<Result<ProductDto>>;
-public record SearchProductsQuery(string? SearchTerm, int PageIndex = 0, int PageSize = 20) : IQuery<Result<IReadOnlyList<ProductDto>>>;
+public record SearchProductsQuery(
+    string? SearchTerm = null,
+    string? Category = null,
+    decimal? MinPrice = null,
+    decimal? MaxPrice = null,
+    int PageIndex = 0,
+    int PageSize = 20) : IQuery<Result<PagedResult<ProductDto>>>;
 public record GetProductVariantsQuery(Guid ProductId) : IQuery<Result<IReadOnlyList<ProductVariantDto>>>;
 
 public class CreateProductCommandHandler(IProductRepository productRepository, IUnitOfWork unitOfWork) : IRequestHandler<CreateProductCommand, Result<ProductDto>>
@@ -78,7 +112,28 @@ public class CreateProductCommandHandler(IProductRepository productRepository, I
             return Error.Conflict("Slug.Exists", $"Slug '{request.Slug}' is already in use.");
         }
 
-        var product = new Product(ProductId.New(), request.Name, slug, new Money(request.BasePrice, request.Currency), request.Description, request.LowStockThreshold);
+        var product = new Product(
+            ProductId.New(),
+            request.Name,
+            slug,
+            new Money(request.BasePrice, request.Currency),
+            request.Description,
+            request.LowStockThreshold,
+            request.Category,
+            request.Categories,
+            request.Tags);
+
+        if (request.Images != null)
+        {
+            foreach (var img in request.Images)
+            {
+                if (!string.IsNullOrWhiteSpace(img))
+                {
+                    product.AddImage(img);
+                }
+            }
+        }
+
         await productRepository.AddAsync(product, ct);
         await unitOfWork.SaveChangesAsync(ct);
 
@@ -106,13 +161,20 @@ public class GetProductBySlugQueryHandler(IProductRepository productRepository) 
     }
 }
 
-public class SearchProductsQueryHandler(IProductRepository productRepository) : IRequestHandler<SearchProductsQuery, Result<IReadOnlyList<ProductDto>>>
+public class SearchProductsQueryHandler(IProductRepository productRepository) : IRequestHandler<SearchProductsQuery, Result<PagedResult<ProductDto>>>
 {
-    public async Task<Result<IReadOnlyList<ProductDto>>> Handle(SearchProductsQuery request, CancellationToken ct)
+    public async Task<Result<PagedResult<ProductDto>>> Handle(SearchProductsQuery request, CancellationToken ct)
     {
-        var products = await productRepository.SearchAsync(request.SearchTerm, request.PageIndex, request.PageSize, ct);
+        var (products, totalCount) = await productRepository.SearchAsync(
+            request.SearchTerm,
+            request.Category,
+            request.MinPrice,
+            request.MaxPrice,
+            request.PageIndex,
+            request.PageSize,
+            ct);
         var dtos = products.Select(ProductDto.FromDomain).ToList();
-        return dtos;
+        return new PagedResult<ProductDto>(dtos, totalCount, request.PageIndex, request.PageSize);
     }
 }
 
@@ -125,7 +187,7 @@ public class UpdateProductCommandHandler(IProductRepository productRepository, I
 
         var slug = string.IsNullOrWhiteSpace(request.Slug) ? product.Slug : new Slug(request.Slug);
         var price = request.BasePrice > 0 ? new Money(request.BasePrice, product.BasePrice.Currency) : product.BasePrice;
-        product.UpdateDetails(request.Name, slug, price, request.Description);
+        product.UpdateDetails(request.Name, slug, price, request.Description, request.Category, request.Categories, request.Tags);
 
         await productRepository.UpdateAsync(product, ct);
         await unitOfWork.SaveChangesAsync(ct);

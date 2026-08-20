@@ -55,4 +55,49 @@ public class DbContextTests : IAsyncLifetime
         fetched!.FirstName.Should().Be("Jane");
         fetched.CustomerType.Should().Be(CustomerType.Registered);
     }
+
+    [Fact]
+    public async Task ProductRepository_AddAndGetBySlug_SucceedsWithValueConverter()
+    {
+        using var context = new VendorDbContext(_fixture.DbContextOptions);
+        var repository = new ProductRepository(context);
+
+        var productId = ProductId.New();
+        var slug = new Slug("gaming-mouse-rgb");
+        var product = new Product(productId, "Gaming Mouse RGB", slug, new Money(49.99m, "USD"));
+
+        await repository.AddAsync(product);
+        await context.SaveChangesAsync();
+
+        var fetched = await repository.GetBySlugAsync(slug);
+        fetched.Should().NotBeNull();
+        fetched!.Id.Should().Be(productId);
+        fetched.Slug.Should().Be(slug);
+    }
+
+    [Fact]
+    public async Task ProductRepository_Search_SucceedsWithLikeFilter()
+    {
+        using var context = new VendorDbContext(_fixture.DbContextOptions);
+        var repository = new ProductRepository(context);
+
+        var productId = ProductId.New();
+        var slug = new Slug("wireless-keyboard-mech");
+        var product = new Product(productId, "Mechanical Keyboard", slug, new Money(89.99m, "USD"), category: "Hardware", categories: ["Electronics", "Hardware"], tags: ["wireless", "gaming"]);
+
+        await repository.AddAsync(product);
+        await context.SaveChangesAsync();
+
+        var (resultsBySlug, totalBySlug) = await repository.SearchAsync("keyboard-mech", pageIndex: 0, pageSize: 10);
+        resultsBySlug.Should().Contain(p => p.Id == productId);
+        totalBySlug.Should().BeGreaterThanOrEqualTo(1);
+
+        var (resultsByName, totalByName) = await repository.SearchAsync("Mechanical", pageIndex: 0, pageSize: 10);
+        resultsByName.Should().Contain(p => p.Id == productId);
+        totalByName.Should().BeGreaterThanOrEqualTo(1);
+
+        var (resultsByCategory, totalByCategory) = await repository.SearchAsync(null, category: "Hardware", pageIndex: 0, pageSize: 10);
+        resultsByCategory.Should().Contain(p => p.Id == productId);
+        totalByCategory.Should().BeGreaterThanOrEqualTo(1);
+    }
 }

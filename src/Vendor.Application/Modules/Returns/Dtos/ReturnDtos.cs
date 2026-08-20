@@ -1,4 +1,5 @@
 using Vendor.Application.Common.Messaging;
+using Vendor.Application.Common.Models;
 using Vendor.Application.Common.Results;
 using Vendor.Domain.Aggregates.ReturnRequest;
 
@@ -33,11 +34,16 @@ public record SubmitReturnRequestCommand(
     Guid OrderId,
     Guid CustomerId,
     string Reason,
-    List<ReturnItemInputDto> Items) : ICommand<Result<ReturnRequestDto>>;
+    List<ReturnItemInputDto> Items,
+    ResolutionType RequestedResolution = ResolutionType.Refund) : ICommand<Result<ReturnRequestDto>>;
 
 public record ApproveReturnRequestCommand(
     Guid ReturnRequestId,
     ResolutionType Resolution) : ICommand<Result<ReturnRequestDto>>;
+
+public record RejectReturnRequestCommand(
+    Guid ReturnRequestId,
+    string Reason) : ICommand<Result<ReturnRequestDto>>;
 
 public record MarkReturnItemsReceivedCommand(
     Guid ReturnRequestId) : ICommand<Result<ReturnRequestDto>>;
@@ -49,3 +55,8 @@ public record CompleteExchangeReplacementCommand(
     Guid ReturnRequestId,
     Guid ReplacementVariantId,
     int ReplacementQuantity) : ICommand<Result<ReturnRequestDto>>;
+
+public record GetReturnByIdQuery(Guid ReturnRequestId) : IQuery<Result<ReturnRequestDto>>;
+
+public record GetAdminReturnsQuery(string? Status = null, int PageIndex = 0, int PageSize = 20) : IQuery<Result<PagedResult<ReturnRequestDto>>>;
+

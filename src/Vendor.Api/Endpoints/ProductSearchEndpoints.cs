@@ -14,6 +14,7 @@ public static class ProductSearchEndpoints
 
         products.MapGet("/search", async (
             string? q,
+            string? category,
             decimal? minPrice,
             decimal? maxPrice,
             string? status,
@@ -26,7 +27,7 @@ public static class ProductSearchEndpoints
             if (pageSize < 1 || pageSize > 100)
                 return Results.BadRequest(new { Error = "pageSize must be between 1 and 100." });
 
-            var filters = new ProductSearchFilters(minPrice, maxPrice, status ?? "Active");
+            var filters = new ProductSearchFilters(Category: category, MinPrice: minPrice, MaxPrice: maxPrice, Status: status ?? "Active");
             var result = await searchService.SearchProductsAsync(q, filters, page, pageSize, ct);
             return Results.Ok(result);
         })

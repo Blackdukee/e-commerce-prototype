@@ -1,5 +1,6 @@
 using MediatR;
 using Vendor.Application.Common.Messaging;
+using Vendor.Application.Common.Models;
 using Vendor.Application.Common.Results;
 using Vendor.Application.Interfaces;
 using Vendor.Application.Modules.Auth;
