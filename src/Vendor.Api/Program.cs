@@ -77,13 +77,13 @@ app.UseMiddleware<MaintenanceModeMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseHangfireDashboard("/hangfire", new DashboardOptions
-{
-    Authorization = new[] { new HangfireDashboardAuthorizationFilter() }
-});
-
 if (!app.Environment.IsEnvironment("Testing"))
 {
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = new[] { new HangfireDashboardAuthorizationFilter() }
+    });
+
     RecurringJob.AddOrUpdate<OutboxProcessorJob>(
         "outbox-processor",
         job => job.ProcessOutboxMessagesAsync(CancellationToken.None),

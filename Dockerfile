@@ -20,6 +20,11 @@ RUN dotnet publish "Vendor.Api.csproj" -c Release -o /app/publish /p:UseAppHost=
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Non-root user execution
 USER app
 

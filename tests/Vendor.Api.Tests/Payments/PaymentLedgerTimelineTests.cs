@@ -1,12 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Vendor.Api.Tests.Helpers;
 using Vendor.Application.Queries.Payments.GetPaymentLedger;
+using Xunit;
 
 namespace Vendor.Api.Tests.Payments;
 
-public class PaymentLedgerTimelineTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public class PaymentLedgerTimelineTests(VendorApiFactory factory) : IClassFixture<VendorApiFactory>
 {
     private readonly HttpClient _client = factory.CreateClient();
 
