@@ -33,13 +33,18 @@ builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
-// Auto-apply EF Core database migrations on startup when using a relational database provider
+// Auto-apply EF Core database migrations and seed sample data on startup
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<VendorDbContext>();
     if (dbContext.Database.IsRelational() && !app.Environment.IsEnvironment("Testing"))
     {
         dbContext.Database.Migrate();
+
+        var userManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<Vendor.Infrastructure.Identity.ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.RoleManager<Vendor.Infrastructure.Identity.ApplicationRole>>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        DatabaseSeeder.SeedAsync(dbContext, userManager, roleManager, logger).GetAwaiter().GetResult();
     }
 }
 

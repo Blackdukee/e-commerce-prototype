@@ -2,6 +2,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: vendor-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     healthcheck:
@@ -14,6 +15,9 @@ services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: vendor-mssql
+    restart: unless-stopped
+    ports:
+      - "14330:1433"
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=YourStr0ng!Pass
@@ -24,22 +28,79 @@ services:
       retries: 5
       start_period: 15s
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: vendor-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: vendor-kibana
+    restart: unless-stopped
+    ports:
+      - "56010:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - XPACK_SECURITY_ENABLED=false
+      - XPACK_SYNTHETICS_ENABLED=false
+      - XPACK_FLEET_ENABLED=false
+      - XPACK_SECURITYSOLUTION_ENABLED=false
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
   vendor-api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: vendor-api
+    restart: unless-stopped
     ports:
+      - "8080:8080"
       - "8081:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
       - ConnectionStrings__DefaultConnection=Server=mssql;Database=VendorDb;User Id=sa;Password=YourStr0ng!Pass;TrustServerCertificate=True;
       - ConnectionStrings__Redis=redis:6379
+      - Elasticsearch__Uri=http://elasticsearch:9200
       - Jwt__SecretKey=super-secret-jwt-key-minimum-32-characters-long!
       - Jwt__Issuer=VendorApi-Dev
       - Jwt__Audience=VendorApiClient-Dev
+      - Cors__AllowedOrigins__0=http://localhost:3000
+      - Cors__AllowedOrigins__1=http://localhost:3001
+      - Cors__AllowedOrigins__2=http://localhost:5173
+      - Cors__AllowedOrigins__3=http://localhost:5174
+      - Cors__AllowedOrigins__4=http://localhost:4200
+      - Cors__AllowedOrigins__5=http://localhost:8080
+      - Cors__AllowedOrigins__6=http://localhost:8081
+      - Cors__AllowedOrigins__7=http://127.0.0.1:3000
+      - Cors__AllowedOrigins__8=http://127.0.0.1:5173
+    volumes:
+      - ./config:/app/config:ro
+      - ./theme:/app/theme:ro
     depends_on:
       mssql:
         condition: service_healthy
       redis:
         condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
