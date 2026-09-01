@@ -31,7 +31,14 @@ public static class DatabaseSeeder
         var adminUser = await userManager.FindByEmailAsync(adminEmail);
         if (adminUser == null)
         {
-            var adminCustomer = new Customer(CustomerId.New(), adminEmail, "Admin", "User", CustomerType.Registered);
+            var adminCustomer = new Customer(
+                CustomerId.New(),
+                adminEmail,
+                "Admin",
+                "User",
+                CustomerType.Registered,
+                analyticsConsent: false,
+                role: CustomerRole.Admin);
             await context.Customers.AddAsync(adminCustomer);
             await context.SaveChangesAsync();
 
@@ -50,6 +57,16 @@ public static class DatabaseSeeder
             {
                 await userManager.AddToRoleAsync(adminUser, "Admin");
                 logger.LogInformation("Seeded default Admin user: {Email}", adminEmail);
+            }
+        }
+        else
+        {
+            var existingAdminCustomer = await context.Customers.FirstOrDefaultAsync(c => c.Email == adminEmail);
+            if (existingAdminCustomer != null && existingAdminCustomer.Role != CustomerRole.Admin && existingAdminCustomer.Role != CustomerRole.SuperAdmin)
+            {
+                existingAdminCustomer.ChangeRole(CustomerRole.Admin, existingAdminCustomer.Id);
+                await context.SaveChangesAsync();
+                logger.LogInformation("Updated existing Admin user role to Admin: {Email}", adminEmail);
             }
         }
 

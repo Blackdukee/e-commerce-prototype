@@ -56,4 +56,36 @@ public class LoginCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         result.Value.AccessToken.Should().Be("access_123");
     }
+
+    [Fact]
+    public async Task Handle_AdminCustomerCredentials_PassesAdminRoleToTokenService()
+    {
+        var customerId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+
+        _identityAuthMock
+            .Setup(i => i.PasswordSignInAsync("admin@vendor.com", "Admin123!", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IdentitySignInResult(true, userId, customerId, IsLockedOut: false, IsUnverifiedEmail: false, null, null));
+
+        var customer = new Customer(new CustomerId(customerId), "admin@vendor.com", "Admin", "User", CustomerType.Registered, false, CustomerRole.Admin);
+        _customerRepoMock
+            .Setup(c => c.GetByIdAsync(new CustomerId(customerId), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(customer);
+
+        IEnumerable<string>? passedRoles = null;
+        _tokenServiceMock
+            .Setup(t => t.GenerateTokens(customerId, "admin@vendor.com", It.IsAny<IEnumerable<string>>()))
+            .Callback<Guid, string, IEnumerable<string>>((_, _, roles) => passedRoles = roles)
+            .Returns(new TokenResult("access_admin_123", "refresh_admin_123", DateTime.UtcNow.AddHours(1)));
+
+        var handler = new LoginWithPasswordCommandHandler(_identityAuthMock.Object, _customerRepoMock.Object, _tokenServiceMock.Object);
+        var command = new LoginWithPasswordCommand("admin@vendor.com", "Admin123!");
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.AccessToken.Should().Be("access_admin_123");
+        passedRoles.Should().NotBeNull();
+        passedRoles.Should().ContainSingle().Which.Should().Be("Admin");
+    }
 }
